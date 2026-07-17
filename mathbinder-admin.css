@@ -1,0 +1,75 @@
+
+.mb-admin-intro{background:#edf8f7;border-left:4px solid #0f8f8f;padding:12px 14px}
+.mb-admin-field{margin:0 0 18px}
+.mb-admin-field label{display:block;margin-bottom:7px;color:#3b2462}
+.mb-admin-field input[type=text],.mb-admin-field input[type=url],.mb-admin-field input[type=number],.mb-admin-field textarea,.mb-admin-field select{width:100%;max-width:none}
+.mb-admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.mb-admin-grid-3{grid-template-columns:repeat(3,1fr)}
+.mb-media-row{display:flex;gap:8px}
+.mb-checklist{margin:0}
+.mb-checklist li{padding:5px 0}
+.mb-checklist .is-complete{color:#087b73;font-weight:600}
+.mb-checklist .is-missing{color:#8a5c00}
+.mb-quick-add-form{max-width:760px;background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:22px;margin-top:20px}
+@media(max-width:782px){.mb-admin-grid,.mb-admin-grid-3{grid-template-columns:1fr}.mb-media-row{display:block}.mb-media-row .button{margin-top:8px}}
+
+.mb-builder-wrap{max-width:1180px}.mb-builder-hero{display:flex;justify-content:space-between;align-items:center;margin:20px 0;padding:26px;border-radius:20px;background:linear-gradient(135deg,#54269a,#0f8f8f);color:#fff}.mb-builder-hero h1{color:#fff}.mb-builder-hero strong{font-size:42px}.mb-builder-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.mb-builder-panel{margin:18px 0;padding:22px;border:1px solid #d7e1e3;border-radius:16px;background:#fff}.mb-builder-cert-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.mb-builder-cert-grid div{padding:9px;border-radius:8px;background:#f4f7f8}.mb-builder-recent-list{display:grid;gap:9px}.mb-builder-recent-list article{display:grid;grid-template-columns:1fr 80px auto auto;gap:12px;align-items:center;padding:12px;border:1px solid #dce5e7;border-radius:10px}.mb-builder-recent-list form{margin:0}@media(max-width:850px){.mb-builder-grid{grid-template-columns:1fr}.mb-builder-cert-grid{grid-template-columns:repeat(2,1fr)}.mb-builder-recent-list article{grid-template-columns:1fr}}
+
+
+/* MathBinder 26.1 — Curriculum Platform Upgrades */
+.mb-builder-hero-pro{position:relative;overflow:hidden}.mb-builder-hero-pro:after{content:"";position:absolute;right:-70px;bottom:-100px;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.08)}
+.mb-builder-hero-copy{position:relative;z-index:2;max-width:760px}.mb-builder-hero-copy h1{font-size:34px}.mb-builder-hero-points{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.mb-builder-hero-points span{padding:8px 11px;border-radius:999px;background:rgba(255,255,255,.13);font-size:12px}.mb-builder-version{position:relative;z-index:2;text-align:center}.mb-builder-version strong,.mb-builder-version small{display:block}
+.mb-builder-panel-heading{display:flex;gap:12px;align-items:center;margin-bottom:18px}.mb-builder-panel-heading>span{display:flex;width:42px;height:42px;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(135deg,#54269a,#0f8f8f);color:#fff;font-weight:900}.mb-builder-panel-heading small{color:#0f6f74;font-size:10px;font-weight:800;text-transform:uppercase}.mb-builder-panel-heading h2{margin:2px 0 0}
+.mb-builder-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.mb-builder-form input[type=text],.mb-builder-form input:not([type]),.mb-builder-form select{width:100%}
+.mb-builder-sequence{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:8px 0 18px}.mb-builder-sequence>b{color:#98a6ac}.mb-sequence-step{display:flex;gap:7px;align-items:center;padding:9px 11px;border-radius:999px;border:1px solid #dbe4e6;background:#fff;font-weight:800}.mb-sequence-step span{display:flex;width:22px;height:22px;align-items:center;justify-content:center;border-radius:50%;background:#f0eafa;color:#54269a;font-size:11px}.mb-builder-lock{padding:16px;border-radius:14px;background:linear-gradient(135deg,#eef9f4,#f4eefb)}
+.mb-builder-secondary-grid{grid-template-columns:.75fr 1.25fr}.mb-builder-gold-overview{display:flex;gap:14px;align-items:center;margin-bottom:16px;padding:15px;border-radius:14px;background:linear-gradient(135deg,#fff7d8,#f4eefb)}.mb-builder-gold-badge{font-size:34px}.mb-builder-cert-grid div{display:flex;gap:7px;align-items:center}
+.mb-builder-lesson-row{grid-template-columns:minmax(250px,1fr) 170px 230px auto!important}.mb-builder-status-line{display:flex;flex-wrap:wrap;gap:6px}.mb-status-pill,.mb-cert-pill{display:inline-flex!important;padding:5px 8px;border-radius:999px;font-size:10px!important;font-weight:800!important}.mb-status-draft{background:#eef1f2;color:#5b6870}.mb-status-development{background:#e7f5f3;color:#0f6f74}.mb-status-review{background:#fff2cc;color:#7b5a00}.mb-status-gold-certified{background:#f2e7ff;color:#54269a}.mb-status-published{background:#e8f6ee;color:#2f7d5b}.mb-cert-not-run{background:#f0f2f3;color:#65737a}.mb-cert-needs-revision{background:#fff0e5;color:#9a5b24}.mb-cert-gold-ready{background:#fff4bf;color:#7b5a00}.mb-builder-cert-status{text-align:center}.mb-builder-cert-status>strong{display:block;color:#54269a;font-size:22px}.mb-builder-cert-status>div{height:9px;border-radius:999px;background:#e4ebed;overflow:hidden}.mb-builder-cert-status>div span{display:block;height:100%;background:linear-gradient(90deg,#0f8f8f,#54269a)}.mb-builder-cert-status small{display:block;margin-top:5px}.mb-builder-status-form{display:grid;grid-template-columns:1fr auto;gap:7px}.mb-builder-recent-actions{display:flex;gap:7px}.mb-builder-recent-actions form{margin:0}
+@media(max-width:1100px){.mb-builder-lesson-row{grid-template-columns:1fr 160px!important}}@media(max-width:850px){.mb-builder-secondary-grid,.mb-builder-form-grid{grid-template-columns:1fr}.mb-builder-lesson-row{grid-template-columns:1fr!important}.mb-builder-status-form{grid-template-columns:1fr}}
+
+
+/* MathBinder 27.0 — Phase 3 Release Candidate */
+.mb-builder-production-badge{display:flex;min-width:180px;flex-direction:column;align-items:center;justify-content:center}
+.mb-builder-production-badge strong{font-size:34px;letter-spacing:.08em}
+.mb-builder-production-badge em{margin-top:7px;padding:5px 8px;border-radius:999px;background:rgba(255,255,255,.16);font-size:10px;font-style:normal}
+.mb-production-dashboard{margin:18px 0;padding:22px;border:1px solid #d6e0e2;border-radius:18px;background:#fff;box-shadow:0 8px 22px rgba(35,50,61,.06)}
+.mb-production-heading{display:flex;justify-content:space-between;gap:18px;align-items:center;margin-bottom:16px}
+.mb-production-heading span{color:#0f6f74;font-size:10px;font-weight:900;letter-spacing:.08em}
+.mb-production-heading h2{margin:3px 0}
+.mb-production-heading>strong{padding:8px 11px;border-radius:999px;background:#f0eafa;color:#54269a}
+.mb-production-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.mb-production-stats article{padding:15px;border:1px solid #dce5e7;border-radius:14px;background:linear-gradient(135deg,#fbfcfc,#f6f2fb)}
+.mb-production-stats small{display:block;color:#607078;font-weight:700}
+.mb-production-stats strong{display:block;margin:6px 0;color:#54269a;font-size:30px}
+.mb-production-stats span{color:#718087;font-size:10px}
+.mb-builder-sequence-wide{justify-content:center}
+.mb-certification-groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.mb-certification-groups article{border:1px solid #dce5e7;border-radius:14px;overflow:hidden;background:#fff}
+.mb-cert-group-heading{display:flex;justify-content:space-between;gap:10px;padding:12px 14px;background:linear-gradient(135deg,#edf7f5,#f4eefb)}
+.mb-cert-group-heading span{color:#54269a;font-weight:900}
+.mb-cert-group-heading strong{color:#0f6f74;font-size:10px}
+.mb-certification-groups ul{margin:0;padding:12px 14px;list-style:none}
+.mb-certification-groups li{display:flex;gap:8px;margin:0;padding:7px 0;border-bottom:1px solid #edf1f2}
+.mb-certification-groups li:last-child{border-bottom:0}
+.mb-certification-groups li span{color:#0f8f8f;font-weight:900}
+.mb-production-row{grid-template-columns:minmax(230px,1fr) 145px minmax(180px,.8fr) 190px auto!important}
+.mb-missing-report{padding:10px;border-radius:10px;background:#fff8ed}
+.mb-missing-report>strong{color:#8b551f;font-size:11px}
+.mb-missing-report ul{margin:5px 0 0;padding:0;list-style:none}
+.mb-missing-report li{margin:2px 0;color:#65737a;font-size:10px}
+.mb-phase-closeout{display:flex;justify-content:space-between;gap:24px;align-items:center;margin:22px 0;padding:24px;border-radius:19px;background:linear-gradient(135deg,#2f7d5b,#0f6f74);color:#fff}
+.mb-phase-closeout span{font-size:10px;font-weight:900;letter-spacing:.1em}
+.mb-phase-closeout h2{margin:5px 0;color:#fff}
+.mb-phase-closeout p{margin:0;color:rgba(255,255,255,.82)}
+.mb-phase-closeout>strong{flex:0 0 auto;padding:12px 16px;border-radius:12px;background:#fff;color:#54269a}
+@media(max-width:1180px){
+  .mb-production-stats{grid-template-columns:repeat(3,1fr)}
+  .mb-production-row{grid-template-columns:1fr 160px!important}
+}
+@media(max-width:860px){
+  .mb-certification-groups{grid-template-columns:repeat(2,1fr)}
+  .mb-production-row{grid-template-columns:1fr!important}
+}
+@media(max-width:620px){
+  .mb-production-heading,.mb-phase-closeout{flex-direction:column;align-items:flex-start}
+  .mb-production-stats,.mb-certification-groups{grid-template-columns:1fr}
+}

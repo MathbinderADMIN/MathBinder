@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="190" viewBox="0 0 760 190">
+<defs>
+  <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#159d9a"/>
+    <stop offset="1" stop-color="#087274"/>
+  </linearGradient>
+</defs>
+<g transform="translate(8 16)">
+  <rect x="30" y="0" width="130" height="150" rx="20" fill="#d9ccef"/>
+  <rect x="14" y="0" width="130" height="150" rx="20" fill="url(#g)"/>
+  <rect x="4" y="0" width="22" height="150" rx="10" fill="#0a6669"/>
+  <g fill="none" stroke="#7c3fc7" stroke-width="8">
+    <ellipse cx="8" cy="38" rx="25" ry="10"/>
+    <ellipse cx="8" cy="75" rx="25" ry="10"/>
+    <ellipse cx="8" cy="112" rx="25" ry="10"/>
+  </g>
+  <path d="M48 47h64M48 76h48M48 105h70" stroke="#fff" stroke-width="9" stroke-linecap="round"/>
+</g>
+<text x="190" y="92" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="700" fill="#5c2ea0">Math</text>
+<text x="355" y="92" font-family="Arial, Helvetica, sans-serif" font-size="72" font-weight="700" fill="#0b8585">Binder</text>
+<text x="195" y="133" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700" letter-spacing="1.5" fill="#5c2ea0">FIND IT. LEARN IT. MASTER IT.</text>
+</svg>
