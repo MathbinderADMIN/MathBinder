@@ -19,6 +19,13 @@ return array(
     ),
     'real_life_math' => 'Operations support daily tasks like budgeting, sharing, measuring, and comparing quantities.',
     'did_you_know' => 'Multiplication and division are inverse operations.',
+    'wordpress_bridge' => array(
+        'enabled'      => true,
+        'owned_fields' => array(
+            'real_life'    => 'real_life_math',
+            'did_you_know' => 'did_you_know',
+        ),
+    ),
     'certification' => array(
         'Solve multi-step problems with confidence.',
         'Explain strategies using models and equations.'
