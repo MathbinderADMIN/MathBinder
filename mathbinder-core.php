@@ -14,6 +14,7 @@ require_once __DIR__ . '/provisioning/lesson-provisioning-context.php';
 require_once __DIR__ . '/provisioning/lesson-provisioning-result.php';
 require_once __DIR__ . '/provisioning/lesson-operation-ledger.php';
 require_once __DIR__ . '/provisioning/provisioning-action.php';
+require_once __DIR__ . '/provisioning/apply-result.php';
 require_once __DIR__ . '/provisioning/wordpress-state.php';
 require_once __DIR__ . '/provisioning/planning-engine.php';
 require_once __DIR__ . '/provisioning/evaluation-engine.php';
