@@ -43,6 +43,9 @@ class MathBinder_Lesson_Provisioning_Result {
     /** @var MathBinder_Provisioning_Action[] */
     protected $skipped_actions = array();
 
+    /** @var MathBinder_Apply_Result[] */
+    protected $apply_results = array();
+
     /**
      * Store immutable run metadata from provisioning context.
      *
@@ -136,6 +139,16 @@ class MathBinder_Lesson_Provisioning_Result {
     }
 
     /**
+     * Record a normalized apply result.
+     *
+     * @param MathBinder_Apply_Result $result
+     * @return void
+     */
+    public function add_apply_result(MathBinder_Apply_Result $result) {
+        $this->apply_results[] = $result;
+    }
+
+    /**
      * @return array
      */
     public function get_created() {
@@ -182,5 +195,12 @@ class MathBinder_Lesson_Provisioning_Result {
      */
     public function get_skipped_actions() {
         return $this->skipped_actions;
+    }
+
+    /**
+     * @return MathBinder_Apply_Result[]
+     */
+    public function get_apply_results() {
+        return $this->apply_results;
     }
 }

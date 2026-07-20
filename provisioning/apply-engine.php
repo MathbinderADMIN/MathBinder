@@ -21,23 +21,91 @@ class MathBinder_Apply_Engine {
     }
 
     /**
-     * Validate and return provisioning actions unchanged.
+     * Convert evaluated provisioning actions into normalized apply results.
      *
      * @param array $actions
      * @param MathBinder_Lesson_Provisioning_Context $context
-     * @return MathBinder_Provisioning_Action[]
+     * @return MathBinder_Apply_Result[]
      */
     public function apply(array $actions, MathBinder_Lesson_Provisioning_Context $context) {
-        $validated_actions = array();
+        $apply_results = array();
 
         foreach ($actions as $index => $action) {
             if (!($action instanceof MathBinder_Provisioning_Action)) {
                 throw new InvalidArgumentException('Action at index ' . $index . ' must be an instance of MathBinder_Provisioning_Action.');
             }
 
-            $validated_actions[] = $action;
+            $apply_results[] = $this->normalize_action($action, $context);
         }
 
-        return $validated_actions;
+        return $apply_results;
+    }
+
+    /**
+     * @param MathBinder_Provisioning_Action $action
+     * @param MathBinder_Lesson_Provisioning_Context $context
+     * @return MathBinder_Apply_Result
+     */
+    protected function normalize_action(MathBinder_Provisioning_Action $action, MathBinder_Lesson_Provisioning_Context $context) {
+        $requested_action = $action->get_action();
+        $dry_run = $context->is_dry_run();
+
+        if ($requested_action === 'skip') {
+            return new MathBinder_Apply_Result(
+                $action->get_run_id(),
+                $action->get_lesson_slug(),
+                $action->get_field(),
+                'skip',
+                'skipped',
+                $action->get_reason(),
+                0,
+                $dry_run,
+                '',
+                ''
+            );
+        }
+
+        if ($requested_action === 'pending_apply' && $dry_run) {
+            return new MathBinder_Apply_Result(
+                $action->get_run_id(),
+                $action->get_lesson_slug(),
+                $action->get_field(),
+                'pending_apply',
+                'dry_run',
+                'action would be applied in dry-run mode',
+                0,
+                true,
+                '',
+                ''
+            );
+        }
+
+        if ($requested_action === 'pending_apply') {
+            return new MathBinder_Apply_Result(
+                $action->get_run_id(),
+                $action->get_lesson_slug(),
+                $action->get_field(),
+                'pending_apply',
+                'unsupported',
+                'live apply is not implemented in this step',
+                0,
+                false,
+                'live_apply_not_implemented',
+                ''
+            );
+        }
+
+        return new MathBinder_Apply_Result(
+            $action->get_run_id(),
+            $action->get_lesson_slug(),
+            $action->get_field(),
+            $requested_action,
+            'unsupported',
+            'unsupported action type',
+            0,
+            $dry_run,
+            'unsupported_action',
+            ''
+        );
     }
 }

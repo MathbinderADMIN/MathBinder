@@ -94,9 +94,18 @@ class MathBinder_Lesson_Provisioner {
                 self::$injected_writer
             );
 
+            $evaluated_actions = self::merge_evaluated_actions_in_manifest_order(
+                $manifest,
+                $planned_actions,
+                $skipped_actions
+            );
+
             if (self::$injected_apply_engine instanceof MathBinder_Apply_Engine) {
-                $planned_actions = self::$injected_apply_engine->apply($planned_actions, $context);
-                $skipped_actions = self::$injected_apply_engine->apply($skipped_actions, $context);
+                $apply_results = self::$injected_apply_engine->apply($evaluated_actions, $context);
+
+                foreach ($apply_results as $apply_result) {
+                    $result->add_apply_result($apply_result);
+                }
             }
 
             foreach ($planned_actions as $planned_action) {
@@ -325,5 +334,55 @@ class MathBinder_Lesson_Provisioner {
         }
 
         $result->add_planned_action($action);
+    }
+
+    /**
+     * Merge planned and skipped evaluated actions in manifest defaults order.
+     *
+     * @param array $manifest
+     * @param MathBinder_Provisioning_Action[] $planned_actions
+     * @param MathBinder_Provisioning_Action[] $skipped_actions
+     * @return MathBinder_Provisioning_Action[]
+     */
+    protected static function merge_evaluated_actions_in_manifest_order(array $manifest, array $planned_actions, array $skipped_actions) {
+        $ordered_actions = array();
+        $planned_by_field = self::index_actions_by_field($planned_actions);
+        $skipped_by_field = self::index_actions_by_field($skipped_actions);
+
+        $defaults = isset($manifest['defaults']) && is_array($manifest['defaults']) ? $manifest['defaults'] : array();
+
+        foreach ($defaults as $field => $value) {
+            $field_name = is_string($field) ? trim($field) : '';
+            if ($field_name === '') {
+                continue;
+            }
+
+            if (isset($planned_by_field[$field_name])) {
+                $ordered_actions[] = $planned_by_field[$field_name];
+                continue;
+            }
+
+            if (isset($skipped_by_field[$field_name])) {
+                $ordered_actions[] = $skipped_by_field[$field_name];
+            }
+        }
+
+        return $ordered_actions;
+    }
+
+    /**
+     * @param MathBinder_Provisioning_Action[] $actions
+     * @return array<string, MathBinder_Provisioning_Action>
+     */
+    protected static function index_actions_by_field(array $actions) {
+        $indexed_actions = array();
+
+        foreach ($actions as $action) {
+            if ($action instanceof MathBinder_Provisioning_Action) {
+                $indexed_actions[$action->get_field()] = $action;
+            }
+        }
+
+        return $indexed_actions;
     }
 }
