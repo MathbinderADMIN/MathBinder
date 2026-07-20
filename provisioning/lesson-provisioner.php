@@ -16,11 +16,17 @@ class MathBinder_Lesson_Provisioner {
     /** @var MathBinder_WordPress_Writer|null */
     private static $injected_writer = null;
 
+    /** @var MathBinder_Apply_Engine|null */
+    private static $injected_apply_engine = null;
+
     /** @var MathBinder_WordPress_Reader */
     private $reader;
 
     /** @var MathBinder_WordPress_Writer */
     private $writer;
+
+    /** @var MathBinder_Apply_Engine */
+    private $apply_engine;
 
     /**
      * @param MathBinder_WordPress_Reader $reader
@@ -28,12 +34,15 @@ class MathBinder_Lesson_Provisioner {
      */
     public function __construct(
         MathBinder_WordPress_Reader $reader,
-        MathBinder_WordPress_Writer $writer
+        MathBinder_WordPress_Writer $writer,
+        MathBinder_Apply_Engine $apply_engine
     ) {
         $this->reader = $reader;
         $this->writer = $writer;
+        $this->apply_engine = $apply_engine;
         self::$injected_reader = $reader;
         self::$injected_writer = $writer;
+        self::$injected_apply_engine = $apply_engine;
     }
 
     /**
@@ -84,6 +93,11 @@ class MathBinder_Lesson_Provisioner {
                 self::$injected_reader,
                 self::$injected_writer
             );
+
+            if (self::$injected_apply_engine instanceof MathBinder_Apply_Engine) {
+                $planned_actions = self::$injected_apply_engine->apply($planned_actions, $context);
+                $skipped_actions = self::$injected_apply_engine->apply($skipped_actions, $context);
+            }
 
             foreach ($planned_actions as $planned_action) {
                 self::store_evaluated_action($result, $planned_action);

@@ -19,6 +19,7 @@ require_once __DIR__ . '/provisioning/planning-engine.php';
 require_once __DIR__ . '/provisioning/evaluation-engine.php';
 require_once __DIR__ . '/provisioning/adapters/wordpress-reader.php';
 require_once __DIR__ . '/provisioning/adapters/wordpress-writer.php';
+require_once __DIR__ . '/provisioning/apply-engine.php';
 require_once __DIR__ . '/provisioning/lesson-provisioner.php';
 
 final class MathBinder_Core {
