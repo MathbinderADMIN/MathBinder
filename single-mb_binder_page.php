@@ -1,12 +1,14 @@
 <?php
 if (!defined('ABSPATH')) exit;
+require_once __DIR__ . '/content-engine/engine.php';
+require_once __DIR__ . '/content-engine/wp-lesson-bridge.php';
 get_header();
 
 $plugin = new MathBinder_Core();
 
 while (have_posts()): the_post();
     $id = get_the_ID();
-    $meta = function($key) use ($id) { return get_post_meta($id, '_mb_' . $key, true); };
+    $meta = MathBinder_WP_Lesson_Bridge::meta($id);
     $terms = get_the_terms($id, MathBinder_Core::TAX);
     $section = ($terms && !is_wp_error($terms)) ? $terms[0] : null;
     $previous = $plugin->get_adjacent_topic($id, 'previous');
