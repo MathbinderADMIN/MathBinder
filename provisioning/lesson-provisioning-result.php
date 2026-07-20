@@ -37,10 +37,10 @@ class MathBinder_Lesson_Provisioning_Result {
     /** @var array */
     protected $errors = array();
 
-    /** @var array */
+    /** @var MathBinder_Provisioning_Action[] */
     protected $planned_actions = array();
 
-    /** @var array */
+    /** @var MathBinder_Provisioning_Action[] */
     protected $skipped_actions = array();
 
     /**
@@ -118,20 +118,20 @@ class MathBinder_Lesson_Provisioning_Result {
     /**
      * Record a planned provisioning action (planning phase only).
      *
-     * @param array $action
+     * @param MathBinder_Provisioning_Action $action
      * @return void
      */
-    public function add_planned_action(array $action) {
+    public function add_planned_action(MathBinder_Provisioning_Action $action) {
         $this->planned_actions[] = $action;
     }
 
     /**
      * Record a skipped planning action.
      *
-     * @param array $action
+     * @param MathBinder_Provisioning_Action $action
      * @return void
      */
-    public function add_skipped_action(array $action) {
+    public function add_skipped_action(MathBinder_Provisioning_Action $action) {
         $this->skipped_actions[] = $action;
     }
 
@@ -171,14 +171,14 @@ class MathBinder_Lesson_Provisioning_Result {
     }
 
     /**
-     * @return array
+     * @return MathBinder_Provisioning_Action[]
      */
     public function get_planned_actions() {
         return $this->planned_actions;
     }
 
     /**
-     * @return array
+     * @return MathBinder_Provisioning_Action[]
      */
     public function get_skipped_actions() {
         return $this->skipped_actions;

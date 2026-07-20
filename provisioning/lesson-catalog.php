@@ -41,12 +41,14 @@ class MathBinder_Lesson_Catalog {
                 // Temporary planning probes for Sprint 7.
                 // Remove these fields before production provisioning.
                 'defaults' => array(
+                    'slug' => 'place-value',
                     'planning_probe_managed' => 'managed probe value',
                     'planning_probe_unmanaged' => 'unmanaged probe value',
                 ),
                 // Temporary planning probe policy mapping.
                 // Remove this probe policy before production provisioning.
                 'write_policies' => array(
+                    'slug' => MathBinder_Lesson_Write_Policy::MISSING_ONLY,
                     'planning_probe_managed' => MathBinder_Lesson_Write_Policy::MISSING_ONLY,
                 ),
                 'operations' => array(),

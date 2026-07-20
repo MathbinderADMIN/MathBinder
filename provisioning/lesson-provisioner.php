@@ -10,6 +10,32 @@
 defined('ABSPATH') || exit;
 
 class MathBinder_Lesson_Provisioner {
+    /** @var MathBinder_WordPress_Reader|null */
+    private static $injected_reader = null;
+
+    /** @var MathBinder_WordPress_Writer|null */
+    private static $injected_writer = null;
+
+    /** @var MathBinder_WordPress_Reader */
+    private $reader;
+
+    /** @var MathBinder_WordPress_Writer */
+    private $writer;
+
+    /**
+     * @param MathBinder_WordPress_Reader $reader
+     * @param MathBinder_WordPress_Writer $writer
+     */
+    public function __construct(
+        MathBinder_WordPress_Reader $reader,
+        MathBinder_WordPress_Writer $writer
+    ) {
+        $this->reader = $reader;
+        $this->writer = $writer;
+        self::$injected_reader = $reader;
+        self::$injected_writer = $writer;
+    }
+
     /**
      * Run lesson provisioning orchestration.
      *
@@ -43,7 +69,29 @@ class MathBinder_Lesson_Provisioner {
             }
 
             $result->add_discovered($catalog_key, $manifest);
-            self::plan_manifest_actions($context, $result, $manifest);
+            $actions = MathBinder_Planning_Engine::build_actions($context, $manifest);
+
+            $planned_actions = MathBinder_Evaluation_Engine::evaluate_actions(
+                $actions['planned_actions'],
+                $context,
+                self::$injected_reader,
+                self::$injected_writer
+            );
+
+            $skipped_actions = MathBinder_Evaluation_Engine::evaluate_actions(
+                $actions['skipped_actions'],
+                $context,
+                self::$injected_reader,
+                self::$injected_writer
+            );
+
+            foreach ($planned_actions as $planned_action) {
+                self::store_evaluated_action($result, $planned_action);
+            }
+
+            foreach ($skipped_actions as $skipped_action) {
+                self::store_evaluated_action($result, $skipped_action);
+            }
         }
 
         return $result;
@@ -203,75 +251,6 @@ class MathBinder_Lesson_Provisioner {
     }
 
     /**
-     * Build planning records from manifest defaults and matching valid policies.
-     *
-     * This stage is intentionally side-effect free.
-     *
-     * @param MathBinder_Lesson_Provisioning_Context $context
-     * @param MathBinder_Lesson_Provisioning_Result $result
-     * @param array $manifest
-     * @return void
-     */
-    protected static function plan_manifest_actions(
-        MathBinder_Lesson_Provisioning_Context $context,
-        MathBinder_Lesson_Provisioning_Result $result,
-        array $manifest
-    ) {
-        $run_id = $context->get_run_id();
-        $lesson_slug = isset($manifest['slug']) && is_string($manifest['slug']) ? $manifest['slug'] : '';
-        $defaults = isset($manifest['defaults']) && is_array($manifest['defaults']) ? $manifest['defaults'] : array();
-        $write_policies = isset($manifest['write_policies']) && is_array($manifest['write_policies']) ? $manifest['write_policies'] : array();
-
-        foreach ($defaults as $field => $value) {
-            $field_name = is_string($field) ? trim($field) : '';
-            $policy = self::resolve_valid_policy_for_field($write_policies, $field_name);
-
-            if ($policy !== '') {
-                $result->add_planned_action(array(
-                    'run_id' => $run_id,
-                    'lesson_slug' => $lesson_slug,
-                    'field' => $field_name,
-                    'policy' => $policy,
-                    'action' => 'evaluate',
-                    'reason' => 'pending WordPress state evaluation',
-                    'value_source' => 'manifest_default',
-                ));
-                continue;
-            }
-
-            $result->add_skipped_action(array(
-                'run_id' => $run_id,
-                'lesson_slug' => $lesson_slug,
-                'field' => $field_name,
-                'policy' => '',
-                'action' => 'skip',
-                'reason' => 'no valid write policy',
-                'value_source' => 'manifest_default',
-            ));
-        }
-    }
-
-    /**
-     * Resolve a valid supported policy for a defaults field.
-     *
-     * @param array $write_policies
-     * @param string $field_name
-     * @return string
-     */
-    protected static function resolve_valid_policy_for_field(array $write_policies, $field_name) {
-        if ($field_name === '' || !array_key_exists($field_name, $write_policies)) {
-            return '';
-        }
-
-        $policy = $write_policies[$field_name];
-        if (!is_string($policy)) {
-            return '';
-        }
-
-        return in_array($policy, self::supported_write_policies(), true) ? $policy : '';
-    }
-
-    /**
      * Determine whether any blocking manifest-level error exists.
      *
      * Write policy errors are intentionally non-blocking at this stage.
@@ -315,5 +294,22 @@ class MathBinder_Lesson_Provisioner {
             'reason' => $reason,
             'received_type' => gettype($received),
         );
+    }
+
+    /**
+     * @param MathBinder_Lesson_Provisioning_Result $result
+     * @param MathBinder_Provisioning_Action $action
+     * @return void
+     */
+    protected static function store_evaluated_action(
+        MathBinder_Lesson_Provisioning_Result $result,
+        MathBinder_Provisioning_Action $action
+    ) {
+        if ($action->get_action() === 'skip') {
+            $result->add_skipped_action($action);
+            return;
+        }
+
+        $result->add_planned_action($action);
     }
 }
