@@ -81,16 +81,57 @@ class MathBinder_Apply_Engine {
         }
 
         if ($requested_action === 'pending_apply') {
+            if (!$this->is_eligible_live_page_creation_action($action)) {
+                return new MathBinder_Apply_Result(
+                    $action->get_run_id(),
+                    $action->get_lesson_slug(),
+                    $action->get_field(),
+                    'pending_apply',
+                    'unsupported',
+                    'live pending_apply action is unsupported for this action shape',
+                    0,
+                    false,
+                    'unsupported_live_action',
+                    ''
+                );
+            }
+
+            $post_slug = trim((string) $action->get_desired_value());
+            $post_title = $this->derive_title_from_lesson_slug($action->get_lesson_slug());
+            $post_data = array(
+                'post_title' => $post_title,
+                'post_name' => $post_slug,
+                'post_type' => 'page',
+                'post_status' => 'draft',
+            );
+
+            try {
+                $created_post_id = $this->writer->create_post($post_data);
+            } catch (Throwable $exception) {
+                return new MathBinder_Apply_Result(
+                    $action->get_run_id(),
+                    $action->get_lesson_slug(),
+                    $action->get_field(),
+                    'pending_apply',
+                    'failed',
+                    'page creation failed during live apply',
+                    0,
+                    false,
+                    'page_creation_failed',
+                    $exception->getMessage()
+                );
+            }
+
             return new MathBinder_Apply_Result(
                 $action->get_run_id(),
                 $action->get_lesson_slug(),
                 $action->get_field(),
                 'pending_apply',
-                'unsupported',
-                'live apply is not implemented in this step',
-                0,
+                'applied',
+                'missing draft page was created',
+                $created_post_id,
                 false,
-                'live_apply_not_implemented',
+                '',
                 ''
             );
         }
@@ -107,5 +148,45 @@ class MathBinder_Apply_Engine {
             'unsupported_action',
             ''
         );
+    }
+
+    /**
+     * @param MathBinder_Provisioning_Action $action
+     * @return bool
+     */
+    protected function is_eligible_live_page_creation_action(MathBinder_Provisioning_Action $action) {
+        if ($action->get_action() !== 'pending_apply') {
+            return false;
+        }
+
+        if ($action->get_field() !== 'slug') {
+            return false;
+        }
+
+        if ($action->get_policy() !== MathBinder_Lesson_Write_Policy::MISSING_ONLY) {
+            return false;
+        }
+
+        if (!is_string($action->get_desired_value()) || trim($action->get_desired_value()) === '') {
+            return false;
+        }
+
+        if (trim($action->get_lesson_slug()) === '') {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * @param string $lesson_slug
+     * @return string
+     */
+    protected function derive_title_from_lesson_slug($lesson_slug) {
+        $title = str_replace(array('-', '_'), ' ', (string) $lesson_slug);
+        $title = preg_replace('/\s+/', ' ', $title);
+        $title = trim((string) $title);
+
+        return ucwords($title);
     }
 }
