@@ -22,6 +22,7 @@ require_once __DIR__ . '/provisioning/adapters/wordpress-reader.php';
 require_once __DIR__ . '/provisioning/adapters/wordpress-writer.php';
 require_once __DIR__ . '/provisioning/apply-engine.php';
 require_once __DIR__ . '/provisioning/lesson-provisioner.php';
+require_once __DIR__ . '/provisioning/developer-verifier.php';
 
 final class MathBinder_Core {
     const CPT = 'mb_binder_page';
