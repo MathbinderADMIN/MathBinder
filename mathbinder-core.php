@@ -23,6 +23,7 @@ require_once __DIR__ . '/provisioning/adapters/wordpress-writer.php';
 require_once __DIR__ . '/provisioning/apply-engine.php';
 require_once __DIR__ . '/provisioning/lesson-provisioner.php';
 require_once __DIR__ . '/provisioning/developer-verifier.php';
+require_once __DIR__ . '/admin/developer-diagnostics.php';
 
 final class MathBinder_Core {
     const CPT = 'mb_binder_page';
@@ -2407,3 +2408,7 @@ final class MathBinder_Core {
     }
 }
 new MathBinder_Core();
+
+if (is_admin()) {
+    new MathBinder_Developer_Diagnostics();
+}
