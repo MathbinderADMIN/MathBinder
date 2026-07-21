@@ -45,7 +45,7 @@ class MathBinder_Evaluation_Engine {
                 continue;
             }
 
-            $state = $reader->find_post_by_slug($slug, 'page');
+            $state = $reader->find_post_by_slug($slug, 'mb_binder_page');
 
             if ($state->get_exists()) {
                 $evaluated_actions[] = new MathBinder_Provisioning_Action(
@@ -54,7 +54,7 @@ class MathBinder_Evaluation_Engine {
                     $action->get_field(),
                     $action->get_policy(),
                     'skip',
-                    'page already exists',
+                    'binder page already exists',
                     $action->get_value_source(),
                     $action->get_desired_value()
                 );
@@ -67,7 +67,7 @@ class MathBinder_Evaluation_Engine {
                 $action->get_field(),
                 $action->get_policy(),
                 'pending_apply',
-                'page is missing',
+                'binder page is missing',
                 $action->get_value_source(),
                 $action->get_desired_value()
             );
