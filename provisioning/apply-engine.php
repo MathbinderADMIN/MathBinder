@@ -97,11 +97,11 @@ class MathBinder_Apply_Engine {
             }
 
             $post_slug = trim((string) $action->get_desired_value());
-            $post_title = $this->derive_title_from_lesson_slug($action->get_lesson_slug());
+            $post_title = $this->derive_title_from_lesson_slug($post_slug);
             $post_data = array(
                 'post_title' => $post_title,
                 'post_name' => $post_slug,
-                'post_type' => 'page',
+                'post_type' => 'mb_binder_page',
                 'post_status' => 'draft',
             );
 
