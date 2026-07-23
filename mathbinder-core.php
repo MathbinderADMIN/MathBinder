@@ -820,22 +820,60 @@ final class MathBinder_Core {
         return $resources;
     }
 
-    public function render_resource_cards($text, $provider = 'Resource', $note = '') {
-        $resources = $this->parse_resources($text);
-        if (!$resources) return '';
-        $html = '<div class="mb-resource-grid">';
-        foreach ($resources as $resource) {
-            $html .= '<article class="mb-resource-card"><span class="mb-provider">' . esc_html($provider) . '</span>';
-            $html .= '<h3>' . esc_html($resource['title']) . '</h3>';
-            if ($note) $html .= '<p class="mb-resource-note">' . esc_html($note) . '</p>';
-            if ($resource['url']) $html .= '<a class="mb-resource-link" href="' . esc_url($resource['url']) . '" target="_blank" rel="noopener">Open resource <span aria-hidden="true">→</span></a>';
-            $html .= '</article>';
-        }
-        $html .= '
-';
-        return $html . '</div>';
+        public function public function render_resource_cards($text, $provider = 'Resource', $note = '') {
+    $resources = $this->parse_resources($text);
+
+    if (!$resources) {
+        return '';
     }
 
+    $html = '<div class="mb-resource-grid">';
+
+    foreach ($resources as $resource) {
+        $title = isset($resource['title'])
+            ? trim((string) $resource['title'])
+            : '';
+
+        $url = isset($resource['url'])
+            ? trim((string) $resource['url'])
+            : '';
+
+        $resource_note = isset($resource['note'])
+            ? trim((string) $resource['note'])
+            : '';
+
+        $valid = array_key_exists('valid', $resource)
+            ? (bool) $resource['valid']
+            : $url !== '';
+
+        $html .= '<article class="mb-resource-card">';
+        $html .= '<span class="mb-provider">' . esc_html($provider) . '</span>';
+
+        if ($title !== '') {
+            $html .= '<h3>' . esc_html($title) . '</h3>';
+        }
+
+        if ($note !== '') {
+            $html .= '<p class="mb-resource-note">' . esc_html($note) . '</p>';
+        }
+
+        if ($valid && $url !== '') {
+            $html .= '<a class="mb-resource-link" href="' . esc_url($url) . '" target="_blank" rel="noopener noreferrer">';
+            $html .= 'Open resource <span aria-hidden="true">→</span>';
+            $html .= '</a>';
+        }
+
+        if ($resource_note !== '') {
+            $html .= '<p class="mb-resource-note">' . esc_html($resource_note) . '</p>';
+        }
+
+        $html .= '</article>';
+    }
+
+    $html .= '</div>';
+
+    return $html;
+}
     public function render_videos($text) {
         $resources = $this->parse_resources($text);
         if (!$resources) return '';
