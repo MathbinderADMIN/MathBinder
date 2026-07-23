@@ -195,9 +195,124 @@ final class MathBinder_Core {
         return 'not_started';
     }
 
+    private function curriculum_dashboard_status_label($value) {
+        $labels = array(
+            'not_started' => esc_html__('Not Started', 'mathbinder-core'),
+            'partial' => esc_html__('Partial', 'mathbinder-core'),
+            'needs_verification' => esc_html__('Needs Verification', 'mathbinder-core'),
+            'complete' => esc_html__('Complete', 'mathbinder-core'),
+            'not_applicable' => esc_html__('Not Applicable', 'mathbinder-core'),
+        );
+
+        $status = trim((string) $value);
+        return isset($labels[$status]) ? $labels[$status] : $labels['not_started'];
+    }
+
     public function render_curriculum_dashboard_page() {
         if (!current_user_can('edit_posts')) {
             wp_die(esc_html__('You do not have permission to access this page.', 'mathbinder-core'));
+        }
+
+        $dashboard_url = admin_url('edit.php?post_type=' . self::CPT . '&page=mb-curriculum-dashboard');
+
+        $raw_section_id = isset($_GET['section_id']) ? wp_unslash($_GET['section_id']) : '';
+        $section_id = absint($raw_section_id);
+
+        if ($section_id > 0) {
+            $section = get_term($section_id, self::TAX);
+
+            if ($section instanceof WP_Term && !is_wp_error($section)) {
+                $pages = get_posts(array(
+                    'post_type' => self::CPT,
+                    'post_status' => array('publish', 'draft', 'pending', 'private'),
+                    'posts_per_page' => -1,
+                    'orderby' => 'title',
+                    'order' => 'ASC',
+                    'tax_query' => array(
+                        array(
+                            'taxonomy' => self::TAX,
+                            'field' => 'term_id',
+                            'terms' => $section->term_id,
+                        ),
+                    ),
+                ));
+
+                $status_fields = array(
+                    esc_html__('Core PDF', 'mathbinder-core') => '_mb_pdf_content_status',
+                    esc_html__('Mr. J', 'mathbinder-core') => '_mb_mrj_status',
+                    esc_html__('IXL', 'mathbinder-core') => '_mb_ixl_status',
+                    esc_html__('Khan Academy', 'mathbinder-core') => '_mb_khan_status',
+                    esc_html__('DeltaMath', 'mathbinder-core') => '_mb_deltamath_status',
+                    esc_html__('Desmos / Amplify', 'mathbinder-core') => '_mb_desmos_status',
+                    esc_html__('Enhancements', 'mathbinder-core') => '_mb_enhancement_status',
+                    esc_html__('Review', 'mathbinder-core') => '_mb_review_status',
+                );
+
+                ?>
+                <div class="wrap">
+                    <h1><?php echo esc_html__('Curriculum Dashboard: ', 'mathbinder-core') . esc_html($section->name); ?></h1>
+                    <p><a href="<?php echo esc_url($dashboard_url); ?>"><?php echo esc_html__('Back to Curriculum Dashboard', 'mathbinder-core'); ?></a></p>
+
+                    <table class="widefat striped">
+                        <thead>
+                            <tr>
+                                <th scope="col"><?php echo esc_html__('Lesson', 'mathbinder-core'); ?></th>
+                                <?php foreach ($status_fields as $label => $meta_key) : ?>
+                                    <th scope="col"><?php echo $label; ?></th>
+                                <?php endforeach; ?>
+                                <th scope="col"><?php echo esc_html__('Edit', 'mathbinder-core'); ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if ($pages) : ?>
+                                <?php foreach ($pages as $page) : ?>
+                                    <?php $edit_link = get_edit_post_link($page->ID); ?>
+                                    <tr>
+                                        <td>
+                                            <?php if ($edit_link) : ?>
+                                                <a href="<?php echo esc_url($edit_link); ?>"><?php echo esc_html(get_the_title($page)); ?></a>
+                                            <?php else : ?>
+                                                <?php echo esc_html(get_the_title($page)); ?>
+                                            <?php endif; ?>
+                                        </td>
+                                        <?php foreach ($status_fields as $label => $meta_key) : ?>
+                                            <td>
+                                                <?php
+                                                echo esc_html(
+                                                    $this->curriculum_dashboard_status_label(
+                                                        get_post_meta($page->ID, $meta_key, true)
+                                                    )
+                                                );
+                                                ?>
+                                            </td>
+                                        <?php endforeach; ?>
+                                        <td>
+                                            <?php if ($edit_link) : ?>
+                                                <a href="<?php echo esc_url($edit_link); ?>"><?php echo esc_html__('Edit Lesson', 'mathbinder-core'); ?></a>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else : ?>
+                                <tr>
+                                    <td colspan="<?php echo esc_attr((string) (count($status_fields) + 2)); ?>"><?php echo esc_html__('No lessons found for this Binder Section.', 'mathbinder-core'); ?></td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php
+                return;
+            }
+
+            ?>
+            <div class="wrap">
+                <h1><?php echo esc_html__('Curriculum Dashboard', 'mathbinder-core'); ?></h1>
+                <p><?php echo esc_html__('The selected Binder Section is invalid or unavailable.', 'mathbinder-core'); ?></p>
+                <p><a href="<?php echo esc_url($dashboard_url); ?>"><?php echo esc_html__('Back to Curriculum Dashboard', 'mathbinder-core'); ?></a></p>
+            </div>
+            <?php
+            return;
         }
 
         $sections = get_terms(array(
@@ -215,6 +330,7 @@ final class MathBinder_Core {
         ?>
         <div class="wrap">
             <h1><?php echo esc_html__('Curriculum Dashboard', 'mathbinder-core'); ?></h1>
+            <p><?php echo esc_html__('Track the conversion of the MathBinder curriculum from the original PDF into completed interactive website lessons.', 'mathbinder-core'); ?></p>
             <table class="widefat striped">
                 <thead>
                     <tr>
@@ -246,6 +362,7 @@ final class MathBinder_Core {
                         $complete = 0;
                         $in_progress = 0;
                         $not_started = 0;
+                        $total = count($pages);
 
                         foreach ($pages as $page) {
                             $state = $this->curriculum_dashboard_review_state($page->ID);
@@ -258,10 +375,19 @@ final class MathBinder_Core {
                                 $not_started++;
                             }
                         }
+
+                        $section_link = add_query_arg(
+                            array(
+                                'post_type' => self::CPT,
+                                'page' => 'mb-curriculum-dashboard',
+                                'section_id' => (int) $section->term_id,
+                            ),
+                            admin_url('edit.php')
+                        );
                         ?>
                         <tr>
-                            <td><?php echo esc_html($section->name); ?></td>
-                            <td><?php echo esc_html((string) count($pages)); ?></td>
+                            <td><a href="<?php echo esc_url($section_link); ?>"><?php echo esc_html($section->name); ?></a></td>
+                            <td><?php echo esc_html((string) $total); ?></td>
                             <td><?php echo esc_html((string) $complete); ?></td>
                             <td><?php echo esc_html((string) $in_progress); ?></td>
                             <td><?php echo esc_html((string) $not_started); ?></td>
