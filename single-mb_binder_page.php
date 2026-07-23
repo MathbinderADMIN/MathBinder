@@ -394,11 +394,10 @@ while (have_posts()): the_post();
             </section>
 
             <div class="mb-external-practice">
-                <?php if ($meta('ixl')): ?><h3>IXL</h3><?php echo $plugin->render_resource_cards($meta('ixl'), 'IXL'); ?><?php endif; ?>
-                <?php if ($meta('khan')): ?><h3>Khan Academy</h3><?php echo $plugin->render_resource_cards($meta('khan'), 'Khan Academy'); ?><?php endif; ?>
-                <?php if ($meta('delta')): ?><h3>DeltaMath</h3><?php echo $plugin->render_resource_cards($meta('delta'), 'DeltaMath'); ?><?php endif; ?>
-                <?php if ($meta('desmos')): ?><h3>Desmos</h3><?php echo $plugin->render_resource_cards($meta('desmos'), 'Desmos'); ?><?php endif; ?>
-            </div>
+<?php if ($meta('ixl')): ?><h3>IXL</h3><?php echo $plugin->render_resource_cards($meta('ixl'), 'IXL', 'Requires an IXL subscription or school account.'); ?><?php endif; ?>
+<?php if ($meta('khan')): ?><h3>Khan Academy</h3><?php echo $plugin->render_resource_cards($meta('khan'), 'Khan Academy', 'A free account is recommended to save progress.'); ?><?php endif; ?>
+<?php if ($meta('delta')): ?><h3>DeltaMath</h3><?php echo $plugin->render_resource_cards($meta('delta'), 'DeltaMath', 'Requires teacher-assigned classroom access.'); ?><?php endif; ?>
+<?php if ($meta('desmos')): ?><h3>Desmos</h3><?php echo $plugin->render_resource_cards($meta('desmos'), 'Desmos', 'Some activities may require a teacher-provided class code.'); ?><?php endif; ?>            </div>
         </div>
     </section>
 
