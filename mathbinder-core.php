@@ -36,6 +36,7 @@ final class MathBinder_Core {
         add_action('init', [$this, 'register_content_types']);
         add_action('add_meta_boxes', [$this, 'add_meta_boxes']);
         add_action('save_post_' . self::CPT, [$this, 'save_meta']);
+        add_action('save_post_' . self::CPT, [$this, 'save_conversion_status_box']);
         add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
         add_filter('template_include', [$this, 'load_single_template']);
@@ -583,6 +584,7 @@ final class MathBinder_Core {
         add_meta_box('mb_downloads', '4. Binder Page Downloads', [$this, 'render_downloads_box'], self::CPT, 'normal', 'default');
         add_meta_box('mb_support', '5. Parent Help, Mastery Check, and Related Topics', [$this, 'render_support_box'], self::CPT, 'normal', 'default');
         add_meta_box('mb_teacher', '6. Teacher Notes and Instructional Support', [$this, 'render_teacher_box'], self::CPT, 'normal', 'default');
+        add_meta_box('mb_conversion_status', 'MathBinder Conversion Status', [$this, 'render_conversion_status_box'], self::CPT, 'side', 'default');
         add_meta_box('mb_checklist', 'Publishing Checklist', [$this, 'render_checklist_box'], self::CPT, 'side', 'high');
         add_meta_box('mb_gold_certification', 'Gold Certification', [$this, 'render_gold_certification_box'], self::CPT, 'side', 'high');
     }
@@ -698,6 +700,116 @@ final class MathBinder_Core {
         $this->textarea('teacher_extensions', 'Extensions and Enrichment', $this->field('teacher_extensions'), 'One idea per line.', 6);
         $this->textarea('teacher_notes', 'Additional Teacher Notes', $this->field('teacher_notes'), 'Teaching moves, reminders, or implementation notes.', 7);
         $this->textarea('standards', 'Standards / Alignment', $this->field('standards'), 'One standard per line.', 6);
+    }
+
+    private function conversion_status_options() {
+        return array(
+            'not_started' => 'Not Started',
+            'partial' => 'Partial',
+            'needs_verification' => 'Needs Verification',
+            'complete' => 'Complete',
+            'not_applicable' => 'Not Applicable',
+        );
+    }
+
+    public function render_conversion_status_box() {
+        global $post;
+
+        if (!$post || $post->post_type !== self::CPT) {
+            return;
+        }
+
+        $fields = array(
+            '_mb_pdf_content_status' => array('label' => 'Core PDF Content', 'help' => ''),
+            '_mb_mrj_status' => array('label' => 'Mr. J Videos', 'help' => ''),
+            '_mb_ixl_status' => array('label' => 'IXL', 'help' => ''),
+            '_mb_khan_status' => array('label' => 'Khan Academy', 'help' => ''),
+            '_mb_deltamath_status' => array('label' => 'DeltaMath', 'help' => ''),
+            '_mb_desmos_status' => array(
+                'label' => 'Desmos Classroom / Amplify',
+                'help' => 'Desmos Classroom is now part of Amplify. No Desmos activities are currently supplied by the source PDF.',
+            ),
+            '_mb_enhancement_status' => array('label' => 'Enhancement Content', 'help' => ''),
+            '_mb_review_status' => array('label' => 'WordPress Review', 'help' => ''),
+        );
+
+        $options = $this->conversion_status_options();
+
+        wp_nonce_field('mb_conversion_status_box', 'mb_conversion_status_nonce');
+
+        echo '<p class="mb-admin-intro">Track conversion of existing MathBinder PDF content and external resources. These fields are for internal production use only.</p>';
+
+        foreach ($fields as $meta_key => $config) {
+            $field_name = substr($meta_key, 1);
+            $value = get_post_meta($post->ID, $meta_key, true);
+            if ($value === '' || !array_key_exists($value, $options)) {
+                $value = 'not_started';
+            }
+
+            echo '<div class="mb-admin-field">';
+            echo '<label for="' . esc_attr($field_name) . '"><strong>' . esc_html($config['label']) . '</strong></label>';
+            echo '<select id="' . esc_attr($field_name) . '" name="' . esc_attr($field_name) . '">';
+            foreach ($options as $option_value => $option_label) {
+                echo '<option value="' . esc_attr($option_value) . '" ' . selected($value, $option_value, false) . '>' . esc_html($option_label) . '</option>';
+            }
+            echo '</select>';
+            if ($config['help'] !== '') {
+                echo '<p class="description">' . esc_html($config['help']) . '</p>';
+            }
+            echo '</div>';
+        }
+    }
+
+    public function save_conversion_status_box($post_id) {
+        if (!isset($_POST['mb_conversion_status_nonce'])) {
+            return;
+        }
+
+        $nonce = sanitize_text_field(wp_unslash($_POST['mb_conversion_status_nonce']));
+        if (!wp_verify_nonce($nonce, 'mb_conversion_status_box')) {
+            return;
+        }
+
+        if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+            return;
+        }
+
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            return;
+        }
+
+        if (get_post_type($post_id) !== self::CPT) {
+            return;
+        }
+
+        if (!current_user_can('edit_post', $post_id)) {
+            return;
+        }
+
+        $allowed_values = array_keys($this->conversion_status_options());
+        $fields = array(
+            '_mb_pdf_content_status' => 'mb_pdf_content_status',
+            '_mb_mrj_status' => 'mb_mrj_status',
+            '_mb_ixl_status' => 'mb_ixl_status',
+            '_mb_khan_status' => 'mb_khan_status',
+            '_mb_deltamath_status' => 'mb_deltamath_status',
+            '_mb_desmos_status' => 'mb_desmos_status',
+            '_mb_enhancement_status' => 'mb_enhancement_status',
+            '_mb_review_status' => 'mb_review_status',
+        );
+
+        foreach ($fields as $meta_key => $field_name) {
+            if (!isset($_POST[$field_name])) {
+                continue;
+            }
+
+            $value = sanitize_key(wp_unslash($_POST[$field_name]));
+            if (!in_array($value, $allowed_values, true)) {
+                continue;
+            }
+
+            update_post_meta($post_id, $meta_key, $value);
+        }
     }
 
 
