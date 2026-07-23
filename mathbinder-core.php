@@ -48,7 +48,9 @@ final class MathBinder_Core {
         add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'column_content'], 10, 2);
         add_action('admin_menu', [$this, 'add_quick_add_page']);
         add_action('admin_menu', [$this, 'add_curriculum_dashboard_page']);
+        add_action('admin_menu', [$this, 'add_bulk_lesson_generator_page']);
         add_action('admin_post_mb_quick_add', [$this, 'handle_quick_add']);
+        add_action('admin_post_mb_bulk_create_lessons', [$this, 'handle_bulk_create_lessons']);
         add_action('admin_post_mb_lesson_builder_create', [$this, 'handle_lesson_builder_create']);
         add_action('admin_post_mb_gold_certify', [$this, 'handle_gold_certify']);
         add_action('admin_post_mb_clone_lesson', [$this, 'handle_clone_lesson']);
@@ -164,6 +166,17 @@ final class MathBinder_Core {
             'edit_posts',
             'mb-curriculum-dashboard',
             [$this, 'render_curriculum_dashboard_page']
+        );
+    }
+
+    public function add_bulk_lesson_generator_page() {
+        add_submenu_page(
+            'edit.php?post_type=' . self::CPT,
+            'Bulk Lesson Generator',
+            'Bulk Lesson Generator',
+            'edit_posts',
+            'mb-bulk-lesson-generator',
+            [$this, 'render_bulk_lesson_generator_page']
         );
     }
 
@@ -427,6 +440,341 @@ final class MathBinder_Core {
 
         wp_safe_redirect(admin_url('post.php?post=' . intval($post_id) . '&action=edit&mb_created=1'));
         exit;
+    }
+
+    public function render_bulk_lesson_generator_page() {
+        if (!current_user_can('edit_posts')) {
+            wp_die(esc_html__('You do not have permission to access this page.', 'mathbinder-core'));
+        }
+
+        $terms = get_terms(array(
+            'taxonomy' => self::TAX,
+            'hide_empty' => false,
+            'orderby' => 'name',
+            'order' => 'ASC',
+        ));
+
+        $created = isset($_GET['created']) ? absint(wp_unslash($_GET['created'])) : 0;
+        $skipped = isset($_GET['skipped']) ? absint(wp_unslash($_GET['skipped'])) : 0;
+        $failed = isset($_GET['failed']) ? absint(wp_unslash($_GET['failed'])) : 0;
+
+        $form_state = $this->get_bulk_lesson_form_state();
+
+        $selected_section_id = isset($form_state['section_id']) ? absint($form_state['section_id']) : 0;
+        $lesson_titles_value = isset($form_state['lesson_titles']) ? (string) $form_state['lesson_titles'] : '';
+
+        $allowed_statuses = array('draft', 'pending', 'publish');
+        $selected_post_status = isset($form_state['post_status']) ? sanitize_text_field((string) $form_state['post_status']) : 'draft';
+        if (!in_array($selected_post_status, $allowed_statuses, true)) {
+            $selected_post_status = 'draft';
+        }
+
+        $open_dashboard_checked = !empty($form_state['open_dashboard']);
+
+        ?>
+        <div class="wrap">
+            <h1><?php echo esc_html__('Bulk Lesson Generator', 'mathbinder-core'); ?></h1>
+            <p><?php echo esc_html__('Create multiple Binder Page placeholders for curriculum conversion.', 'mathbinder-core'); ?></p>
+
+            <?php if ($created > 0 || $skipped > 0 || $failed > 0) : ?>
+                <div class="notice notice-info is-dismissible">
+                    <p><?php echo esc_html(sprintf(_n('%d lesson created.', '%d lessons created.', $created, 'mathbinder-core'), $created)); ?></p>
+                    <p><?php echo esc_html(sprintf(_n('%d existing lesson skipped.', '%d existing lessons skipped.', $skipped, 'mathbinder-core'), $skipped)); ?></p>
+                    <p><?php echo esc_html(sprintf(_n('%d lesson could not be created.', '%d lessons could not be created.', $failed, 'mathbinder-core'), $failed)); ?></p>
+                </div>
+            <?php endif; ?>
+
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="mb_bulk_create_lessons">
+                <?php wp_nonce_field('mb_bulk_create_lessons', 'mb_bulk_create_lessons_nonce'); ?>
+
+                <table class="form-table">
+                    <tr>
+                        <th scope="row"><label for="mb_bulk_section_id"><?php echo esc_html__('Binder Section', 'mathbinder-core'); ?></label></th>
+                        <td>
+                            <select id="mb_bulk_section_id" name="mb_bulk_section_id" required>
+                                <option value=""><?php echo esc_html__('Choose a section', 'mathbinder-core'); ?></option>
+                                <?php if (!is_wp_error($terms) && $terms) : ?>
+                                    <?php foreach ($terms as $term) : ?>
+                                        <option value="<?php echo esc_attr((string) $term->term_id); ?>" <?php selected($selected_section_id, (int) $term->term_id); ?>><?php echo esc_html($term->name); ?></option>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="mb_bulk_lesson_titles"><?php echo esc_html__('Lesson Titles', 'mathbinder-core'); ?></label></th>
+                        <td>
+                            <textarea id="mb_bulk_lesson_titles" name="mb_bulk_lesson_titles" rows="12" class="large-text" required><?php echo esc_textarea($lesson_titles_value); ?></textarea>
+                            <p class="description"><?php echo esc_html__('Enter one lesson title per line. Blank lines will be ignored.', 'mathbinder-core'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="mb_bulk_post_status"><?php echo esc_html__('Post Status', 'mathbinder-core'); ?></label></th>
+                        <td>
+                            <select id="mb_bulk_post_status" name="mb_bulk_post_status">
+                                <option value="draft" <?php selected($selected_post_status, 'draft'); ?>><?php echo esc_html__('Draft', 'mathbinder-core'); ?></option>
+                                <option value="pending" <?php selected($selected_post_status, 'pending'); ?>><?php echo esc_html__('Pending Review', 'mathbinder-core'); ?></option>
+                                <option value="publish" <?php selected($selected_post_status, 'publish'); ?>><?php echo esc_html__('Publish', 'mathbinder-core'); ?></option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><?php echo esc_html__('After Creation', 'mathbinder-core'); ?></th>
+                        <td>
+                            <label for="mb_bulk_open_dashboard">
+                                <input id="mb_bulk_open_dashboard" name="mb_bulk_open_dashboard" type="checkbox" value="1" <?php checked($open_dashboard_checked); ?>>
+                                <?php echo esc_html__('Open the selected Binder Section in the Curriculum Dashboard after creation', 'mathbinder-core'); ?>
+                            </label>
+                        </td>
+                    </tr>
+                </table>
+
+                <?php submit_button(__('Create Lessons', 'mathbinder-core')); ?>
+            </form>
+        </div>
+        <?php
+    }
+
+    public function handle_bulk_create_lessons() {
+        if (!current_user_can('edit_posts')) {
+            wp_die(esc_html__('You do not have permission to do this.', 'mathbinder-core'));
+        }
+
+        check_admin_referer('mb_bulk_create_lessons', 'mb_bulk_create_lessons_nonce');
+
+        $bulk_page_url = add_query_arg(
+            array(
+                'post_type' => self::CPT,
+                'page' => 'mb-bulk-lesson-generator',
+            ),
+            admin_url('edit.php')
+        );
+
+        $section_id = isset($_POST['mb_bulk_section_id']) ? absint(wp_unslash($_POST['mb_bulk_section_id'])) : 0;
+        $raw_titles = isset($_POST['mb_bulk_lesson_titles']) ? wp_unslash($_POST['mb_bulk_lesson_titles']) : '';
+        $requested_status = isset($_POST['mb_bulk_post_status']) ? sanitize_text_field(wp_unslash($_POST['mb_bulk_post_status'])) : 'draft';
+        $open_dashboard = isset($_POST['mb_bulk_open_dashboard']) && sanitize_text_field(wp_unslash($_POST['mb_bulk_open_dashboard'])) === '1';
+
+        $allowed_statuses = array('draft', 'pending', 'publish');
+        $post_status = in_array($requested_status, $allowed_statuses, true) ? $requested_status : 'draft';
+
+        $term = ($section_id > 0) ? get_term($section_id, self::TAX) : null;
+        if (!($term instanceof WP_Term) || is_wp_error($term) || $term->taxonomy !== self::TAX) {
+            $this->store_bulk_lesson_form_state($section_id, $raw_titles, $post_status, $open_dashboard);
+            wp_safe_redirect(add_query_arg(array('created' => 0, 'skipped' => 0, 'failed' => 0), $bulk_page_url));
+            exit;
+        }
+
+        $titles = $this->parse_bulk_lesson_titles($raw_titles);
+        if (!$titles) {
+            $this->store_bulk_lesson_form_state($section_id, $raw_titles, $post_status, $open_dashboard);
+            wp_safe_redirect(add_query_arg(array('created' => 0, 'skipped' => 0, 'failed' => 0), $bulk_page_url));
+            exit;
+        }
+
+        $existing_pages = get_posts(array(
+            'post_type' => self::CPT,
+            'post_status' => array('publish', 'draft', 'pending', 'private', 'future'),
+            'posts_per_page' => -1,
+            'fields' => 'ids',
+            'tax_query' => array(
+                array(
+                    'taxonomy' => self::TAX,
+                    'field' => 'term_id',
+                    'terms' => $term->term_id,
+                ),
+            ),
+        ));
+
+        $existing_title_map = array();
+        foreach ($existing_pages as $existing_id) {
+            $existing_title = get_the_title($existing_id);
+            $key = $this->bulk_lesson_title_key($existing_title);
+            if ($key !== '') {
+                $existing_title_map[$key] = true;
+            }
+        }
+
+        $created = 0;
+        $skipped = 0;
+        $failed = 0;
+
+        foreach ($titles as $title) {
+            $title_key = $this->bulk_lesson_title_key($title);
+            if ($title_key === '') {
+                continue;
+            }
+
+            if (isset($existing_title_map[$title_key])) {
+                $skipped++;
+                continue;
+            }
+
+            $post_id = wp_insert_post(array(
+                'post_type' => self::CPT,
+                'post_status' => $post_status,
+                'post_title' => $title,
+                'post_name' => sanitize_title($title),
+            ), true);
+
+            if (is_wp_error($post_id) || !$post_id) {
+                $failed++;
+                continue;
+            }
+
+            $assigned = wp_set_object_terms($post_id, array((int) $term->term_id), self::TAX);
+            if (is_wp_error($assigned)) {
+                wp_delete_post($post_id, true);
+                $failed++;
+                continue;
+            }
+
+            foreach ($this->conversion_status_meta_keys() as $status_key) {
+                update_post_meta($post_id, $status_key, 'not_started');
+            }
+
+            $existing_title_map[$title_key] = true;
+            $created++;
+        }
+
+        if ($created > 0 && ($skipped > 0 || $failed > 0)) {
+            $this->store_bulk_lesson_form_state($section_id, $raw_titles, $post_status, $open_dashboard);
+        }
+
+        $redirect_base = $open_dashboard
+            ? add_query_arg(
+                array(
+                    'post_type' => self::CPT,
+                    'page' => 'mb-curriculum-dashboard',
+                    'section_id' => (int) $term->term_id,
+                ),
+                admin_url('edit.php')
+            )
+            : $bulk_page_url;
+
+        wp_safe_redirect(add_query_arg(
+            array(
+                'created' => (int) $created,
+                'skipped' => (int) $skipped,
+                'failed' => (int) $failed,
+            ),
+            $redirect_base
+        ));
+        exit;
+    }
+
+    private function conversion_status_meta_keys() {
+        return array(
+            '_mb_pdf_content_status',
+            '_mb_mrj_status',
+            '_mb_ixl_status',
+            '_mb_khan_status',
+            '_mb_deltamath_status',
+            '_mb_desmos_status',
+            '_mb_enhancement_status',
+            '_mb_review_status',
+        );
+    }
+
+    private function bulk_lesson_form_transient_key() {
+        return 'mb_bulk_lesson_form_state_' . get_current_user_id();
+    }
+
+    private function store_bulk_lesson_form_state($section_id, $lesson_titles, $post_status, $open_dashboard) {
+        $allowed_statuses = array('draft', 'pending', 'publish');
+        $safe_status = in_array($post_status, $allowed_statuses, true) ? $post_status : 'draft';
+
+        $state = array(
+            'section_id' => absint($section_id),
+            'lesson_titles' => sanitize_textarea_field((string) $lesson_titles),
+            'post_status' => $safe_status,
+            'open_dashboard' => (bool) $open_dashboard,
+        );
+
+        set_transient($this->bulk_lesson_form_transient_key(), $state, 5 * MINUTE_IN_SECONDS);
+    }
+
+    private function get_bulk_lesson_form_state() {
+        $state = get_transient($this->bulk_lesson_form_transient_key());
+        delete_transient($this->bulk_lesson_form_transient_key());
+
+        if (!is_array($state)) {
+            return array();
+        }
+
+        $allowed_statuses = array('draft', 'pending', 'publish');
+        $post_status = isset($state['post_status']) ? sanitize_text_field((string) $state['post_status']) : 'draft';
+        if (!in_array($post_status, $allowed_statuses, true)) {
+            $post_status = 'draft';
+        }
+
+        return array(
+            'section_id' => isset($state['section_id']) ? absint($state['section_id']) : 0,
+            'lesson_titles' => isset($state['lesson_titles']) ? sanitize_textarea_field((string) $state['lesson_titles']) : '',
+            'post_status' => $post_status,
+            'open_dashboard' => !empty($state['open_dashboard']),
+        );
+    }
+
+    private function parse_bulk_lesson_titles($raw_titles) {
+        $lines = preg_split('/\r\n|\r|\n/', (string) $raw_titles);
+        if (!is_array($lines)) {
+            return array();
+        }
+
+        $titles = array();
+        $seen = array();
+
+        foreach ($lines as $line) {
+            $title = $this->bulk_sanitize_lesson_title($line);
+            if ($title === '') {
+                continue;
+            }
+
+            $key = $this->bulk_lesson_title_key($title);
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $titles[] = $title;
+        }
+
+        return $titles;
+    }
+
+    private function bulk_sanitize_lesson_title($line) {
+        $line = str_replace(
+            array("\xC2\xA0", "\xE2\x80\xAF", "\xE2\x80\x8B", "\xEF\xBB\xBF"),
+            array(' ', ' ', '', ''),
+            (string) $line
+        );
+
+        return sanitize_text_field(trim($line));
+    }
+
+    private function bulk_lesson_title_key($title) {
+        $normalized = $this->bulk_sanitize_lesson_title($title);
+        if ($normalized === '') {
+            return '';
+        }
+
+        $collapsed = preg_replace('/\s+/u', ' ', $normalized);
+        if (!is_string($collapsed) || $collapsed === '') {
+            $collapsed = preg_replace('/\s+/', ' ', $normalized);
+        }
+
+        $collapsed = trim((string) $collapsed);
+        if ($collapsed === '') {
+            return '';
+        }
+
+        if (function_exists('mb_strtolower')) {
+            return mb_strtolower($collapsed, 'UTF-8');
+        }
+
+        return strtolower($collapsed);
     }
 
 
