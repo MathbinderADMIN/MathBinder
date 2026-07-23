@@ -47,6 +47,7 @@ final class MathBinder_Core {
         add_filter('manage_' . self::CPT . '_posts_columns', [$this, 'columns']);
         add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'column_content'], 10, 2);
         add_action('admin_menu', [$this, 'add_quick_add_page']);
+        add_action('admin_menu', [$this, 'add_curriculum_dashboard_page']);
         add_action('admin_post_mb_quick_add', [$this, 'handle_quick_add']);
         add_action('admin_post_mb_lesson_builder_create', [$this, 'handle_lesson_builder_create']);
         add_action('admin_post_mb_gold_certify', [$this, 'handle_gold_certify']);
@@ -151,6 +152,123 @@ final class MathBinder_Core {
                 </table>
                 <?php submit_button('Create Binder Page'); ?>
             </form>
+        </div>
+        <?php
+    }
+
+    public function add_curriculum_dashboard_page() {
+        add_submenu_page(
+            'edit.php?post_type=' . self::CPT,
+            'Curriculum Dashboard',
+            'Curriculum Dashboard',
+            'edit_posts',
+            'mb-curriculum-dashboard',
+            [$this, 'render_curriculum_dashboard_page']
+        );
+    }
+
+    private function curriculum_dashboard_review_state($post_id) {
+        $review_status = trim((string) get_post_meta($post_id, '_mb_review_status', true));
+
+        if ($review_status === 'complete') {
+            return 'complete';
+        }
+
+        $status_keys = array(
+            '_mb_pdf_content_status',
+            '_mb_mrj_status',
+            '_mb_ixl_status',
+            '_mb_khan_status',
+            '_mb_deltamath_status',
+            '_mb_desmos_status',
+            '_mb_enhancement_status',
+            '_mb_review_status',
+        );
+
+        foreach ($status_keys as $meta_key) {
+            $value = trim((string) get_post_meta($post_id, $meta_key, true));
+            if ($value !== '' && $value !== 'not_started') {
+                return 'in_progress';
+            }
+        }
+
+        return 'not_started';
+    }
+
+    public function render_curriculum_dashboard_page() {
+        if (!current_user_can('edit_posts')) {
+            wp_die(esc_html__('You do not have permission to access this page.', 'mathbinder-core'));
+        }
+
+        $sections = get_terms(array(
+            'taxonomy' => self::TAX,
+            'hide_empty' => false,
+            'orderby' => 'name',
+            'order' => 'ASC',
+        ));
+
+        if (is_wp_error($sections)) {
+            echo '<div class="wrap"><h1>' . esc_html__('Curriculum Dashboard', 'mathbinder-core') . '</h1><p>' . esc_html__('Binder sections are temporarily unavailable.', 'mathbinder-core') . '</p></div>';
+            return;
+        }
+
+        ?>
+        <div class="wrap">
+            <h1><?php echo esc_html__('Curriculum Dashboard', 'mathbinder-core'); ?></h1>
+            <table class="widefat striped">
+                <thead>
+                    <tr>
+                        <th scope="col"><?php echo esc_html__('Binder Section', 'mathbinder-core'); ?></th>
+                        <th scope="col"><?php echo esc_html__('Total Lessons', 'mathbinder-core'); ?></th>
+                        <th scope="col"><?php echo esc_html__('Complete', 'mathbinder-core'); ?></th>
+                        <th scope="col"><?php echo esc_html__('In Progress', 'mathbinder-core'); ?></th>
+                        <th scope="col"><?php echo esc_html__('Not Started', 'mathbinder-core'); ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($sections as $section) : ?>
+                        <?php
+                        $pages = get_posts(array(
+                            'post_type' => self::CPT,
+                            'post_status' => array('publish', 'draft', 'pending', 'private'),
+                            'posts_per_page' => -1,
+                            'orderby' => 'title',
+                            'order' => 'ASC',
+                            'tax_query' => array(
+                                array(
+                                    'taxonomy' => self::TAX,
+                                    'field' => 'term_id',
+                                    'terms' => $section->term_id,
+                                ),
+                            ),
+                        ));
+
+                        $complete = 0;
+                        $in_progress = 0;
+                        $not_started = 0;
+
+                        foreach ($pages as $page) {
+                            $state = $this->curriculum_dashboard_review_state($page->ID);
+
+                            if ($state === 'complete') {
+                                $complete++;
+                            } elseif ($state === 'in_progress') {
+                                $in_progress++;
+                            } else {
+                                $not_started++;
+                            }
+                        }
+                        ?>
+                        <tr>
+                            <td><?php echo esc_html($section->name); ?></td>
+                            <td><?php echo esc_html((string) count($pages)); ?></td>
+                            <td><?php echo esc_html((string) $complete); ?></td>
+                            <td><?php echo esc_html((string) $in_progress); ?></td>
+                            <td><?php echo esc_html((string) $not_started); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
         <?php
     }
