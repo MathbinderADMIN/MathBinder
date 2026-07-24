@@ -249,7 +249,13 @@ try {
     }
     $includedDirectories.Add('content (allowlist)')
 
-    Compress-Archive -Path $packageRoot -DestinationPath $zipPath -Force
+    Push-Location -LiteralPath $workRoot
+    try {
+        Compress-Archive -Path $PluginFolder -DestinationPath $zipPath -Force
+    }
+    finally {
+        Pop-Location
+    }
 
     Invoke-ZipValidation -ZipPath $zipPath -PluginFolderName $PluginFolder
 
