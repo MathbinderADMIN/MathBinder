@@ -2387,6 +2387,7 @@ final class MathBinder_Core {
     }
 
     public function topics_shortcode() {
+        $topic_map = MathBinder_Lesson_Catalog::get_section_topic_map();
         $terms = get_terms([
             'taxonomy' => self::TAX,
             'hide_empty' => false,
@@ -2398,74 +2399,13 @@ final class MathBinder_Core {
             return '<p>No Binder Sections are available yet.</p>';
         }
 
-        $previews = [
-            'the-number-system' => [
-                'Place Value',
-                'Number Operations',
-                'Fractions & Decimals',
-                'Order of Operations',
-                'Real & Complex Numbers'
-            ],
-            'ratios-proportional-relationships' => [
-                'Ratios',
-                'Rates & Unit Rates',
-                'Proportions',
-                'Percent',
-                'Scale Drawings'
-            ],
-            'algebraic-expressions' => [
-                'Variables & Expressions',
-                'Combining Like Terms',
-                'Distributive Property',
-                'Exponents',
-                'Evaluating Expressions'
-            ],
-            'solving-graphing-equations' => [
-                'One-Step Equations',
-                'Two-Step Equations',
-                'Multi-Step Equations',
-                'Slope',
-                'Linear Equations'
-            ],
-            'solving-graphing-inequalities' => [
-                'One-Step Inequalities',
-                'Two-Step Inequalities',
-                'Compound Inequalities',
-                'Graphing Inequalities',
-                'Word Problems'
-            ],
-            'triangles-transformations' => [
-                'Angle Relationships',
-                'Triangles',
-                'Pythagorean Theorem',
-                'Transformations',
-                'Similarity & Congruence'
-            ],
-            'volume-area' => [
-                'Area',
-                'Circles',
-                'Surface Area',
-                'Volume',
-                'Composite Figures'
-            ],
-            'probability-statistics' => [
-                'Measures of Center',
-                'Data Displays',
-                'Scatter Plots',
-                'Probability',
-                'Compound Events'
-            ],
-        ];
-
-        $icons = ['▦','x²','△','✎','≷','◇','▱','◆'];
-
         ob_start();
         ?>
         <div class="mb-topics-notebook">
             <header class="mb-topics-notebook-hero">
                 <span class="mb-topics-kicker">MathBinder Table of Contents</span>
                 <h1>Open a Binder Section</h1>
-                <p>Each section is designed like a page in your digital binder. Choose a section to find organized lessons, videos, practice, downloads, and support.</p>
+                <p>Choose a section to see the verified PDF hierarchy. Primary lessons remain separate from nested subsections.</p>
 
                 <form class="mb-topics-notebook-search" role="search" method="get" action="<?php echo esc_url(home_url('/')); ?>">
                     <input type="search" name="s" placeholder="Search for a math topic" required>
@@ -2477,7 +2417,13 @@ final class MathBinder_Core {
             <main class="mb-notebook-page-grid">
                 <?php foreach ($terms as $index => $term):
                     $number = intval(get_term_meta($term->term_id, 'mb_number', true));
-                    $topics = isset($previews[$term->slug]) ? $previews[$term->slug] : [];
+                    $section_map = isset($topic_map[$term->slug]) ? $topic_map[$term->slug] : [
+                        'description' => '',
+                        'inventory_status' => 'not_started',
+                        'topics' => [],
+                        'primary_topics' => [],
+                        'nested_topics' => []
+                    ];
                     $published = get_posts([
                         'post_type' => self::CPT,
                         'post_status' => 'publish',
@@ -2502,7 +2448,6 @@ final class MathBinder_Core {
 
                         <div class="mb-notebook-content">
                             <div class="mb-notebook-title-row">
-                                <span class="mb-notebook-icon" aria-hidden="true"><?php echo esc_html($icons[$index] ?? '▦'); ?></span>
                                 <div>
                                     <span class="mb-notebook-label">Binder Section <?php echo esc_html($number); ?></span>
                                     <h2><?php echo esc_html($term->name); ?></h2>
@@ -2511,17 +2456,34 @@ final class MathBinder_Core {
 
                             <div class="mb-notebook-rule"></div>
 
-                            <p class="mb-notebook-intro">Open this section to explore the topic sequence and available Binder Pages.</p>
+                            <p class="mb-notebook-intro"><?php echo esc_html(!empty($section_map['description']) ? $section_map['description'] : 'Open this section to explore the verified PDF hierarchy.'); ?></p>
 
-                            <ul class="mb-notebook-topic-list">
-                                <?php foreach ($topics as $topic): ?>
-                                    <li><?php echo esc_html($topic); ?></li>
-                                <?php endforeach; ?>
-                            </ul>
+                            <?php if (!empty($section_map['primary_topics'])): ?>
+                                <div class="mb-notebook-topic-group">
+                                    <strong>Primary Lessons</strong>
+                                    <ul class="mb-notebook-topic-list">
+                                        <?php foreach ($section_map['primary_topics'] as $topic): ?>
+                                            <li><?php echo esc_html($topic['title']); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if (!empty($section_map['nested_topics'])): ?>
+                                <div class="mb-notebook-topic-group">
+                                    <strong>Nested Subsections</strong>
+                                    <ul class="mb-notebook-topic-list">
+                                        <?php foreach ($section_map['nested_topics'] as $topic): ?>
+                                            <li><?php echo esc_html($topic['title']); ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endif; ?>
 
                             <div class="mb-notebook-status">
                                 <span><?php echo esc_html(count($published)); ?> available now</span>
-                                <span><?php echo esc_html(count($topics)); ?> planned topics</span>
+                                <span><?php echo esc_html(count($section_map['primary_topics'])); ?> primary lessons</span>
+                                <span><?php echo esc_html(count($section_map['nested_topics'])); ?> nested subsections</span>
                             </div>
 
                             <a class="mb-notebook-open" href="<?php echo esc_url(get_term_link($term)); ?>">
@@ -2572,6 +2534,10 @@ final class MathBinder_Core {
             ];
         }
         wp_send_json_success($results);
+    }
+
+    private function section_topic_map() {
+        return MathBinder_Lesson_Catalog::get_section_topic_map();
     }
 
     public function columns($columns) {
