@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - repair/sprint-12-3-php-validation
+      - feature/sprint-13-1-canonical-lesson-catalog
   pull_request:
 
 jobs:
