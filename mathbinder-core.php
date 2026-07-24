@@ -1524,7 +1524,7 @@ final class MathBinder_Core {
         return $resources;
     }
 
-        public function public function render_resource_cards($text, $provider = 'Resource', $note = '') {
+        public function render_resource_cards($text, $provider = 'Resource', $note = '') {
     $resources = $this->parse_resources($text);
 
     if (!$resources) {
