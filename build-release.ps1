@@ -10,6 +10,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
+Add-Type -AssemblyName System.IO.Compression
 
 function Ensure-Directory {
     param(
@@ -249,12 +250,32 @@ try {
     }
     $includedDirectories.Add('content (allowlist)')
 
-    Push-Location -LiteralPath $workRoot
+    $fileStream = [System.IO.File]::Open($zipPath, [System.IO.FileMode]::Create)
     try {
-        Compress-Archive -Path $PluginFolder -DestinationPath $zipPath -Force
+        $zipArchive = New-Object System.IO.Compression.ZipArchive($fileStream, [System.IO.Compression.ZipArchiveMode]::Create, $false)
+        try {
+            $filesToArchive = Get-ChildItem -LiteralPath $packageRoot -File -Recurse
+            foreach ($file in $filesToArchive) {
+                $relativePath = $file.FullName.Substring($workRoot.Length).TrimStart([char[]]@('\', '/'))
+                $entryName = ($relativePath -replace '\\', '/')
+                $entry = $zipArchive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+                $entryStream = $entry.Open()
+                $sourceStream = [System.IO.File]::OpenRead($file.FullName)
+                try {
+                    $sourceStream.CopyTo($entryStream)
+                }
+                finally {
+                    $sourceStream.Dispose()
+                    $entryStream.Dispose()
+                }
+            }
+        }
+        finally {
+            $zipArchive.Dispose()
+        }
     }
     finally {
-        Pop-Location
+        $fileStream.Dispose()
     }
 
     Invoke-ZipValidation -ZipPath $zipPath -PluginFolderName $PluginFolder
