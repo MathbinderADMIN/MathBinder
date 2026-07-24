@@ -1,0 +1,53 @@
+name: PHP Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/sprint-13-1-canonical-catalog
+      - main
+  pull_request:
+
+jobs:
+  php-lint:
+    name: PHP Lint (PHP ${{ matrix.php-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        php-version: ['7.4', '8.3']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+
+      - name: Lint required active source files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          php -l mathbinder-core.php
+          php -l single-mb_binder_page.php
+          php -l taxonomy-mb_binder_section.php
+
+      - name: Lint all tracked PHP files (with exclusions)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          php_files=$(git ls-files '*.php' | grep -Ev '^(Backups/|build/|Releases/|July-17-Backup/|vendor/|node_modules/)')
+
+          if [ -z "$php_files" ]; then
+            echo "No tracked PHP files found after exclusions."
+            exit 0
+          fi
+
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            php -l "$file"
+          done <<< "$php_files"
