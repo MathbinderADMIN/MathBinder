@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.0.8
+ * Version: 27.0.9
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -26,7 +26,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.0.8';
+    const VERSION = '27.0.9';
 
     private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
@@ -68,8 +68,15 @@ final class MathBinder_Core {
         add_action('admin_notices', [$this, 'admin_notice']);
         add_action('admin_head', [$this, 'hide_lesson_builder_notices']);
         add_action('admin_init', [$this, 'maybe_upgrade']);
+        add_action('wp', [$this, 'capture_pagelayer_timing_wp_priority_1'], 1);
+        add_action('wp', [$this, 'capture_pagelayer_timing_wp_priority_10'], 10);
+        add_action('wp', [$this, 'capture_pagelayer_timing_wp_priority_999'], 999);
+        add_action('wp', [$this, 'capture_pagelayer_timing_wp_php_int_max'], PHP_INT_MAX);
         add_action('wp', [$this, 'capture_runtime_query_diagnostic'], PHP_INT_MAX);
         add_action('template_redirect', [$this, 'apply_pagelayer_taxonomy_compatibility'], 1);
+        add_action('template_redirect', [$this, 'capture_pagelayer_timing_template_redirect_priority_10'], 10);
+        add_action('template_redirect', [$this, 'capture_pagelayer_timing_template_redirect_priority_999'], 999);
+        add_action('template_redirect', [$this, 'capture_pagelayer_timing_template_redirect_php_int_max'], PHP_INT_MAX);
         add_action('wp_footer', [$this, 'render_runtime_diagnostic_panel_footer'], PHP_INT_MAX);
         add_action('shutdown', [$this, 'render_runtime_diagnostic_panel_shutdown'], PHP_INT_MAX);
         add_filter('body_class', [$this, 'body_classes']);
@@ -811,6 +818,10 @@ final class MathBinder_Core {
     public function load_single_template($template) {
         $incoming_template = $template;
         $incoming_basename = (is_string($incoming_template) && $incoming_template !== '') ? wp_basename($incoming_template) : '';
+        $diag_allowed = $this->runtime_diagnostic_allowed();
+        if ($diag_allowed) {
+            $this->capture_pagelayer_timing_checkpoint('template_include_999_entry', 'ti_999_in');
+        }
         $is_singular_cpt = is_singular(self::CPT);
         $is_tax_self_tax = is_tax(self::TAX);
         $taxonomy_template = plugin_dir_path(__FILE__) . 'taxonomy-mb_binder_section.php';
@@ -830,7 +841,8 @@ final class MathBinder_Core {
             }
         }
 
-        if ($this->runtime_diagnostic_allowed()) {
+        if ($diag_allowed) {
+            $this->capture_pagelayer_timing_checkpoint('template_include_999_exit', 'ti_999_out');
             $this->set_last_mathbinder_trace_point('priority_999');
             $load_callback_count = intval($this->runtime_diag_data['load_single_template_callback_count'] ?? 0) + 1;
             $return_basename = (is_string($selected_template) && $selected_template !== '') ? wp_basename($selected_template) : '';
@@ -862,6 +874,8 @@ final class MathBinder_Core {
             return $template;
         }
 
+        $this->capture_pagelayer_timing_checkpoint('template_include_998_entry', 'ti_998');
+
         $this->set_last_mathbinder_trace_point('priority_998');
 
         $incoming_basename = (is_string($template) && $template !== '') ? wp_basename($template) : '';
@@ -882,6 +896,8 @@ final class MathBinder_Core {
             return $template;
         }
 
+        $this->capture_pagelayer_timing_checkpoint('template_include_1000_entry', 'ti_1000');
+
         $this->set_last_mathbinder_trace_point('priority_1000');
 
         $incoming_basename = (is_string($template) && $template !== '') ? wp_basename($template) : '';
@@ -901,6 +917,8 @@ final class MathBinder_Core {
         if (!$this->runtime_diagnostic_allowed()) {
             return $template;
         }
+
+        $this->capture_pagelayer_timing_checkpoint('template_include_1001_entry', 'ti_1001');
 
         $this->set_last_mathbinder_trace_point('priority_1001');
 
@@ -1106,44 +1124,141 @@ final class MathBinder_Core {
         return $ctx['request_path_match'] && $ctx['admin_capability_check'] && $ctx['diagnostic_parameter_present'];
     }
 
+    private function read_pagelayer_template_include_priority_state() {
+        $priority = has_filter('template_include', 'pagelayer_template_include');
+        $present = ($priority !== false);
+        $exact_priority_1000 = ($priority === 1000);
+        $count_at_1000 = 0;
+
+        if (isset($GLOBALS['wp_filter']) && is_array($GLOBALS['wp_filter']) && isset($GLOBALS['wp_filter']['template_include'])) {
+            $hook = $GLOBALS['wp_filter']['template_include'];
+            if (is_object($hook) && isset($hook->callbacks) && is_array($hook->callbacks) && isset($hook->callbacks[1000]) && is_array($hook->callbacks[1000])) {
+                foreach ($hook->callbacks[1000] as $entry) {
+                    if (is_array($entry) && array_key_exists('function', $entry)) {
+                        $count_at_1000++;
+                    }
+                }
+            }
+        }
+
+        return [
+            'present' => $present,
+            'exact_priority_1000' => $exact_priority_1000,
+            'count_at_1000' => $count_at_1000,
+        ];
+    }
+
+    private function capture_pagelayer_timing_checkpoint($checkpoint_key, $compact_label) {
+        if (!$this->runtime_diagnostic_allowed()) {
+            return;
+        }
+
+        $state = $this->read_pagelayer_template_include_priority_state();
+        $sequence = intval($this->runtime_diag_data['pagelayer_timing_sequence_counter'] ?? 0) + 1;
+        $this->runtime_diag_data['pagelayer_timing_sequence_counter'] = $sequence;
+
+        if (!isset($this->runtime_diag_data['pagelayer_timing']) || !is_array($this->runtime_diag_data['pagelayer_timing'])) {
+            $this->runtime_diag_data['pagelayer_timing'] = [];
+        }
+
+        $this->runtime_diag_data['pagelayer_timing'][$checkpoint_key] = [
+            'executed' => true,
+            'present' => !empty($state['present']),
+            'exact_priority_1000' => !empty($state['exact_priority_1000']),
+            'count_at_1000' => intval($state['count_at_1000'] ?? 0),
+            'sequence' => $sequence,
+            'instance_marker' => $this->runtime_instance_marker,
+        ];
+
+        if (!isset($this->runtime_diag_data['pagelayer_timing_checkpoint_order']) || !is_array($this->runtime_diag_data['pagelayer_timing_checkpoint_order'])) {
+            $this->runtime_diag_data['pagelayer_timing_checkpoint_order'] = [];
+        }
+        $this->runtime_diag_data['pagelayer_timing_checkpoint_order'][] = strval($sequence) . '=' . $compact_label;
+
+        if (!isset($this->runtime_diag_data['pagelayer_first_observed_sequence']) && !empty($state['exact_priority_1000'])) {
+            $this->runtime_diag_data['pagelayer_first_observed_checkpoint'] = $compact_label;
+            $this->runtime_diag_data['pagelayer_first_observed_sequence'] = strval($sequence);
+        }
+    }
+
+    private function pagelayer_timing_row_values($checkpoint_key) {
+        $checkpoints = isset($this->runtime_diag_data['pagelayer_timing']) && is_array($this->runtime_diag_data['pagelayer_timing'])
+            ? $this->runtime_diag_data['pagelayer_timing']
+            : [];
+        $entry = isset($checkpoints[$checkpoint_key]) && is_array($checkpoints[$checkpoint_key])
+            ? $checkpoints[$checkpoint_key]
+            : [];
+
+        return [
+            'executed' => !empty($entry['executed']),
+            'present' => !empty($entry['present']),
+            'exact_priority_1000' => !empty($entry['exact_priority_1000']),
+            'count_at_1000' => intval($entry['count_at_1000'] ?? 0),
+            'sequence' => strval($entry['sequence'] ?? ''),
+            'instance_marker' => (string) ($entry['instance_marker'] ?? ''),
+        ];
+    }
+
+    private function pagelayer_timing_instance_consistent() {
+        $checkpoints = isset($this->runtime_diag_data['pagelayer_timing']) && is_array($this->runtime_diag_data['pagelayer_timing'])
+            ? $this->runtime_diag_data['pagelayer_timing']
+            : [];
+        if (empty($checkpoints)) {
+            return false;
+        }
+
+        $expected = $this->constructor_instance_marker;
+        foreach ($checkpoints as $entry) {
+            if (!is_array($entry) || empty($entry['executed'])) {
+                continue;
+            }
+            if (!isset($entry['instance_marker']) || (string) $entry['instance_marker'] !== $expected) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public function capture_pagelayer_timing_wp_priority_1() {
+        $this->capture_pagelayer_timing_checkpoint('wp_priority_1', 'wp_1');
+    }
+
+    public function capture_pagelayer_timing_wp_priority_10() {
+        $this->capture_pagelayer_timing_checkpoint('wp_priority_10', 'wp_10');
+    }
+
+    public function capture_pagelayer_timing_wp_priority_999() {
+        $this->capture_pagelayer_timing_checkpoint('wp_priority_999', 'wp_999');
+    }
+
+    public function capture_pagelayer_timing_wp_php_int_max() {
+        $this->capture_pagelayer_timing_checkpoint('wp_php_int_max', 'wp_max');
+    }
+
+    public function capture_pagelayer_timing_template_redirect_priority_10() {
+        $this->capture_pagelayer_timing_checkpoint('template_redirect_priority_10', 'tr_10');
+    }
+
+    public function capture_pagelayer_timing_template_redirect_priority_999() {
+        $this->capture_pagelayer_timing_checkpoint('template_redirect_priority_999', 'tr_999');
+    }
+
+    public function capture_pagelayer_timing_template_redirect_php_int_max() {
+        $this->capture_pagelayer_timing_checkpoint('template_redirect_php_int_max', 'tr_max');
+    }
+
     public function apply_pagelayer_taxonomy_compatibility() {
-        if (is_admin()) {
-            return;
-        }
-        if ((function_exists('wp_doing_ajax') && wp_doing_ajax()) || (defined('DOING_AJAX') && DOING_AJAX)) {
-            return;
-        }
-        if ((defined('REST_REQUEST') && REST_REQUEST) || (function_exists('wp_is_json_request') && wp_is_json_request())) {
-            return;
-        }
-        if ((function_exists('wp_doing_cron') && wp_doing_cron()) || (defined('DOING_CRON') && DOING_CRON)) {
+        if (!$this->runtime_diagnostic_allowed()) {
             return;
         }
 
-        global $pagenow;
-        if (is_string($pagenow) && $pagenow === 'wp-login.php') {
-            return;
-        }
+        $this->capture_pagelayer_timing_checkpoint('template_redirect_priority_1', 'tr_1');
+        $state = $this->read_pagelayer_template_include_priority_state();
 
-        if (!is_tax(self::TAX)) {
-            return;
-        }
-
-        $present_before = has_filter('template_include', 'pagelayer_template_include');
-        $attempted = ($present_before === 1000);
-        $removed = false;
-
-        if ($attempted) {
-            $removed = remove_filter('template_include', 'pagelayer_template_include', 1000) === true;
-        }
-
-        if ($this->runtime_diagnostic_allowed()) {
-            $this->runtime_diag_data['pagelayer_callback_present_before_compatibility'] = ($present_before === 1000);
-            $this->runtime_diag_data['pagelayer_callback_removal_attempted'] = $attempted;
-            $this->runtime_diag_data['pagelayer_callback_removal_succeeded'] = $removed;
-            $present_after = has_filter('template_include', 'pagelayer_template_include');
-            $this->runtime_diag_data['pagelayer_callback_present_after_compatibility'] = ($present_after === 1000);
-        }
+        $this->runtime_diag_data['pagelayer_callback_present_before_compatibility'] = !empty($state['exact_priority_1000']);
+        $this->runtime_diag_data['pagelayer_callback_removal_attempted'] = false;
+        $this->runtime_diag_data['pagelayer_callback_removal_succeeded'] = false;
+        $this->runtime_diag_data['pagelayer_callback_present_after_compatibility'] = !empty($state['exact_priority_1000']);
     }
 
     private function safe_query_var_value($value) {
@@ -1175,6 +1290,8 @@ final class MathBinder_Core {
         if (!$this->runtime_diagnostic_allowed()) {
             return $template;
         }
+
+        $this->capture_pagelayer_timing_checkpoint('template_include_php_int_max_entry', 'ti_max');
 
         $this->set_last_mathbinder_trace_point('php_int_max');
 
@@ -1211,6 +1328,7 @@ final class MathBinder_Core {
         }
 
         $this->capture_priority_1000_registry_before_filter();
+        $this->runtime_diag_data['priority_1000_before_filter_capture_stage'] = 'wp@PHP_INT_MAX';
 
         $ctx = $this->runtime_diagnostic_context();
 
@@ -1258,7 +1376,28 @@ final class MathBinder_Core {
     }
 
     private function runtime_diag_rows($render_method) {
+        $this->capture_pagelayer_timing_checkpoint('panel_render', 'panel_render');
         $this->capture_priority_1000_registry_at_render();
+
+        $wp_1 = $this->pagelayer_timing_row_values('wp_priority_1');
+        $wp_10 = $this->pagelayer_timing_row_values('wp_priority_10');
+        $wp_999 = $this->pagelayer_timing_row_values('wp_priority_999');
+        $wp_max = $this->pagelayer_timing_row_values('wp_php_int_max');
+        $tr_1 = $this->pagelayer_timing_row_values('template_redirect_priority_1');
+        $tr_10 = $this->pagelayer_timing_row_values('template_redirect_priority_10');
+        $tr_999 = $this->pagelayer_timing_row_values('template_redirect_priority_999');
+        $tr_max = $this->pagelayer_timing_row_values('template_redirect_php_int_max');
+        $ti_998 = $this->pagelayer_timing_row_values('template_include_998_entry');
+        $ti_999_entry = $this->pagelayer_timing_row_values('template_include_999_entry');
+        $ti_999_exit = $this->pagelayer_timing_row_values('template_include_999_exit');
+        $ti_1000 = $this->pagelayer_timing_row_values('template_include_1000_entry');
+        $ti_1001 = $this->pagelayer_timing_row_values('template_include_1001_entry');
+        $ti_max = $this->pagelayer_timing_row_values('template_include_php_int_max_entry');
+        $panel_render = $this->pagelayer_timing_row_values('panel_render');
+        $shutdown = $this->pagelayer_timing_row_values('shutdown');
+        $checkpoint_order = isset($this->runtime_diag_data['pagelayer_timing_checkpoint_order']) && is_array($this->runtime_diag_data['pagelayer_timing_checkpoint_order'])
+            ? implode(' | ', $this->runtime_diag_data['pagelayer_timing_checkpoint_order'])
+            : '';
 
         $load_998_priority = has_filter('template_include', [$this, 'trace_template_filter_998']);
         $load_999_priority = has_filter('template_include', [$this, 'load_single_template']);
@@ -1330,6 +1469,7 @@ final class MathBinder_Core {
             'PRIORITY_1000_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['priority_1000_callback_count'] ?? 0)),
             'PRIORITY_1000_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['priority_1000_incoming_basename'] ?? ''),
             'PRIORITY_1000_CALLBACK_COUNT_BEFORE_FILTER' => strval(intval($this->runtime_diag_data['priority_1000_callback_count_before_filter'] ?? 0)),
+            'PRIORITY_1000_BEFORE_FILTER_CAPTURE_STAGE' => (string) ($this->runtime_diag_data['priority_1000_before_filter_capture_stage'] ?? ''),
             'PRIORITY_1000_CALLBACK_ORDER_BEFORE_FILTER' => (string) ($this->runtime_diag_data['priority_1000_callback_order_before_filter'] ?? ''),
             'PRIORITY_1000_MATHBINDER_POSITION_BEFORE_FILTER' => (string) ($this->runtime_diag_data['priority_1000_mathbinder_position_before_filter'] ?? ''),
             'PRIORITY_1000_REGISTRY_CAPTURED_BEFORE_FILTER' => $this->bool_string(!empty($this->runtime_diag_data['priority_1000_registry_captured_before_filter'])),
@@ -1345,6 +1485,90 @@ final class MathBinder_Core {
             'PAGELAYER_CALLBACK_REMOVAL_ATTEMPTED' => $this->bool_string(!empty($this->runtime_diag_data['pagelayer_callback_removal_attempted'])),
             'PAGELAYER_CALLBACK_REMOVAL_SUCCEEDED' => $this->bool_string(!empty($this->runtime_diag_data['pagelayer_callback_removal_succeeded'])),
             'PAGELAYER_CALLBACK_PRESENT_AFTER_COMPATIBILITY' => $this->bool_string(!empty($this->runtime_diag_data['pagelayer_callback_present_after_compatibility'])),
+            'PAGELAYER_TIMING_WP_PRIORITY_1_EXECUTED' => $this->bool_string(!empty($wp_1['executed'])),
+            'PAGELAYER_TIMING_WP_PRIORITY_1_PRESENT' => $this->bool_string(!empty($wp_1['present'])),
+            'PAGELAYER_TIMING_WP_PRIORITY_1_EXACT_PRIORITY_1000' => $this->bool_string(!empty($wp_1['exact_priority_1000'])),
+            'PAGELAYER_TIMING_WP_PRIORITY_1_COUNT_AT_1000' => strval(intval($wp_1['count_at_1000'])),
+
+            'PAGELAYER_TIMING_WP_PRIORITY_10_EXECUTED' => $this->bool_string(!empty($wp_10['executed'])),
+            'PAGELAYER_TIMING_WP_PRIORITY_10_PRESENT' => $this->bool_string(!empty($wp_10['present'])),
+            'PAGELAYER_TIMING_WP_PRIORITY_10_EXACT_PRIORITY_1000' => $this->bool_string(!empty($wp_10['exact_priority_1000'])),
+            'PAGELAYER_TIMING_WP_PRIORITY_10_COUNT_AT_1000' => strval(intval($wp_10['count_at_1000'])),
+
+            'PAGELAYER_TIMING_WP_PRIORITY_999_EXECUTED' => $this->bool_string(!empty($wp_999['executed'])),
+            'PAGELAYER_TIMING_WP_PRIORITY_999_PRESENT' => $this->bool_string(!empty($wp_999['present'])),
+            'PAGELAYER_TIMING_WP_PRIORITY_999_EXACT_PRIORITY_1000' => $this->bool_string(!empty($wp_999['exact_priority_1000'])),
+            'PAGELAYER_TIMING_WP_PRIORITY_999_COUNT_AT_1000' => strval(intval($wp_999['count_at_1000'])),
+
+            'PAGELAYER_TIMING_WP_PHP_INT_MAX_EXECUTED' => $this->bool_string(!empty($wp_max['executed'])),
+            'PAGELAYER_TIMING_WP_PHP_INT_MAX_PRESENT' => $this->bool_string(!empty($wp_max['present'])),
+            'PAGELAYER_TIMING_WP_PHP_INT_MAX_EXACT_PRIORITY_1000' => $this->bool_string(!empty($wp_max['exact_priority_1000'])),
+            'PAGELAYER_TIMING_WP_PHP_INT_MAX_COUNT_AT_1000' => strval(intval($wp_max['count_at_1000'])),
+
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_1_EXECUTED' => $this->bool_string(!empty($tr_1['executed'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_1_PRESENT' => $this->bool_string(!empty($tr_1['present'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_1_EXACT_PRIORITY_1000' => $this->bool_string(!empty($tr_1['exact_priority_1000'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_1_COUNT_AT_1000' => strval(intval($tr_1['count_at_1000'])),
+
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_10_EXECUTED' => $this->bool_string(!empty($tr_10['executed'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_10_PRESENT' => $this->bool_string(!empty($tr_10['present'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_10_EXACT_PRIORITY_1000' => $this->bool_string(!empty($tr_10['exact_priority_1000'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_10_COUNT_AT_1000' => strval(intval($tr_10['count_at_1000'])),
+
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_999_EXECUTED' => $this->bool_string(!empty($tr_999['executed'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_999_PRESENT' => $this->bool_string(!empty($tr_999['present'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_999_EXACT_PRIORITY_1000' => $this->bool_string(!empty($tr_999['exact_priority_1000'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PRIORITY_999_COUNT_AT_1000' => strval(intval($tr_999['count_at_1000'])),
+
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PHP_INT_MAX_EXECUTED' => $this->bool_string(!empty($tr_max['executed'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PHP_INT_MAX_PRESENT' => $this->bool_string(!empty($tr_max['present'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PHP_INT_MAX_EXACT_PRIORITY_1000' => $this->bool_string(!empty($tr_max['exact_priority_1000'])),
+            'PAGELAYER_TIMING_TEMPLATE_REDIRECT_PHP_INT_MAX_COUNT_AT_1000' => strval(intval($tr_max['count_at_1000'])),
+
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_998_ENTRY_EXECUTED' => $this->bool_string(!empty($ti_998['executed'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_998_ENTRY_PRESENT' => $this->bool_string(!empty($ti_998['present'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_998_ENTRY_EXACT_PRIORITY_1000' => $this->bool_string(!empty($ti_998['exact_priority_1000'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_998_ENTRY_COUNT_AT_1000' => strval(intval($ti_998['count_at_1000'])),
+
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_999_ENTRY_EXECUTED' => $this->bool_string(!empty($ti_999_entry['executed'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_999_ENTRY_PRESENT' => $this->bool_string(!empty($ti_999_entry['present'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_999_ENTRY_EXACT_PRIORITY_1000' => $this->bool_string(!empty($ti_999_entry['exact_priority_1000'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_999_ENTRY_COUNT_AT_1000' => strval(intval($ti_999_entry['count_at_1000'])),
+
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_999_EXIT_EXECUTED' => $this->bool_string(!empty($ti_999_exit['executed'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_999_EXIT_PRESENT' => $this->bool_string(!empty($ti_999_exit['present'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_999_EXIT_EXACT_PRIORITY_1000' => $this->bool_string(!empty($ti_999_exit['exact_priority_1000'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_999_EXIT_COUNT_AT_1000' => strval(intval($ti_999_exit['count_at_1000'])),
+
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_1000_ENTRY_EXECUTED' => $this->bool_string(!empty($ti_1000['executed'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_1000_ENTRY_PRESENT' => $this->bool_string(!empty($ti_1000['present'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_1000_ENTRY_EXACT_PRIORITY_1000' => $this->bool_string(!empty($ti_1000['exact_priority_1000'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_1000_ENTRY_COUNT_AT_1000' => strval(intval($ti_1000['count_at_1000'])),
+
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_1001_ENTRY_EXECUTED' => $this->bool_string(!empty($ti_1001['executed'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_1001_ENTRY_PRESENT' => $this->bool_string(!empty($ti_1001['present'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_1001_ENTRY_EXACT_PRIORITY_1000' => $this->bool_string(!empty($ti_1001['exact_priority_1000'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_1001_ENTRY_COUNT_AT_1000' => strval(intval($ti_1001['count_at_1000'])),
+
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_PHP_INT_MAX_ENTRY_EXECUTED' => $this->bool_string(!empty($ti_max['executed'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_PHP_INT_MAX_ENTRY_PRESENT' => $this->bool_string(!empty($ti_max['present'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_PHP_INT_MAX_ENTRY_EXACT_PRIORITY_1000' => $this->bool_string(!empty($ti_max['exact_priority_1000'])),
+            'PAGELAYER_TIMING_TEMPLATE_INCLUDE_PHP_INT_MAX_ENTRY_COUNT_AT_1000' => strval(intval($ti_max['count_at_1000'])),
+
+            'PAGELAYER_TIMING_PANEL_RENDER_EXECUTED' => $this->bool_string(!empty($panel_render['executed'])),
+            'PAGELAYER_TIMING_PANEL_RENDER_PRESENT' => $this->bool_string(!empty($panel_render['present'])),
+            'PAGELAYER_TIMING_PANEL_RENDER_EXACT_PRIORITY_1000' => $this->bool_string(!empty($panel_render['exact_priority_1000'])),
+            'PAGELAYER_TIMING_PANEL_RENDER_COUNT_AT_1000' => strval(intval($panel_render['count_at_1000'])),
+
+            'PAGELAYER_TIMING_SHUTDOWN_EXECUTED' => $this->bool_string(!empty($shutdown['executed'])),
+            'PAGELAYER_TIMING_SHUTDOWN_PRESENT' => $this->bool_string(!empty($shutdown['present'])),
+            'PAGELAYER_TIMING_SHUTDOWN_EXACT_PRIORITY_1000' => $this->bool_string(!empty($shutdown['exact_priority_1000'])),
+            'PAGELAYER_TIMING_SHUTDOWN_COUNT_AT_1000' => strval(intval($shutdown['count_at_1000'])),
+
+            'PAGELAYER_FIRST_OBSERVED_CHECKPOINT' => (string) ($this->runtime_diag_data['pagelayer_first_observed_checkpoint'] ?? ''),
+            'PAGELAYER_FIRST_OBSERVED_SEQUENCE' => (string) ($this->runtime_diag_data['pagelayer_first_observed_sequence'] ?? ''),
+            'PAGELAYER_TIMING_CHECKPOINT_ORDER' => $checkpoint_order,
+            'PAGELAYER_TIMING_INSTANCE_CONSISTENT' => $this->bool_string($this->pagelayer_timing_instance_consistent()),
             'PHP_INT_MAX_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['php_int_max_executed'])),
             'PHP_INT_MAX_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['php_int_max_callback_count'] ?? 0)),
             'PHP_INT_MAX_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['php_int_max_incoming_basename'] ?? ''),
@@ -1454,7 +1678,7 @@ final class MathBinder_Core {
         $this->runtime_diag_panel_rendered = true;
 
         echo '<div style="position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;max-width:980px;max-height:46vh;margin:0 auto;padding:12px;border:2px solid #2b2b2b;background:#fffef5;color:#111;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:auto;font:13px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;">';
-        echo '<div style="font-weight:700;font-size:16px;margin-bottom:8px;">' . esc_html('MathBinder Runtime Diagnostic 27.0.7') . '</div>';
+        echo '<div style="font-weight:700;font-size:16px;margin-bottom:8px;">' . esc_html('MathBinder Runtime Diagnostic ' . self::VERSION) . '</div>';
         foreach ($rows as $label => $value) {
             echo '<div style="display:flex;gap:8px;border-top:1px solid #d9d6c7;padding:4px 0;">';
             echo '<div style="min-width:290px;font-weight:600;">' . esc_html($label) . '</div>';
@@ -1471,6 +1695,7 @@ final class MathBinder_Core {
     public function render_runtime_diagnostic_panel_shutdown() {
         if ($this->runtime_diagnostic_allowed()) {
             $this->set_last_mathbinder_trace_point('shutdown');
+            $this->capture_pagelayer_timing_checkpoint('shutdown', 'shutdown');
             $this->capture_shutdown_error_diagnostic();
         }
         $this->maybe_render_runtime_diagnostic_panel('shutdown');
