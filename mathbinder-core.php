@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.0.3
+ * Version: 27.0.4
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -26,7 +26,10 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.0.3';
+    const VERSION = '27.0.4';
+
+    private $runtime_diag_data = [];
+    private $runtime_diag_panel_rendered = false;
 
     public function __construct() {
         add_action('init', [$this, 'register_content_types']);
@@ -35,6 +38,7 @@ final class MathBinder_Core {
         add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
         add_filter('template_include', [$this, 'load_single_template'], 999);
+        add_filter('template_include', [$this, 'capture_runtime_template_diagnostic'], PHP_INT_MAX);
         add_shortcode('mathbinder_topics', [$this, 'topics_shortcode']);
         add_shortcode('mathbinder_home', [$this, 'homepage_shortcode']);
         add_shortcode('mathbinder_progress', [$this, 'progress_shortcode']);
@@ -50,6 +54,9 @@ final class MathBinder_Core {
         add_action('admin_notices', [$this, 'admin_notice']);
         add_action('admin_head', [$this, 'hide_lesson_builder_notices']);
         add_action('admin_init', [$this, 'maybe_upgrade']);
+        add_action('wp', [$this, 'capture_runtime_query_diagnostic'], PHP_INT_MAX);
+        add_action('wp_footer', [$this, 'render_runtime_diagnostic_panel_footer'], PHP_INT_MAX);
+        add_action('shutdown', [$this, 'render_runtime_diagnostic_panel_shutdown'], PHP_INT_MAX);
         add_filter('body_class', [$this, 'body_classes']);
         add_action('wp_ajax_mb_topic_search', [$this, 'ajax_topic_search']);
         add_action('wp_ajax_nopriv_mb_topic_search', [$this, 'ajax_topic_search']);
@@ -795,6 +802,188 @@ final class MathBinder_Core {
             }
         }
         return $template;
+    }
+
+    private function bool_string($value) {
+        return $value ? 'true' : 'false';
+    }
+
+    private function normalize_request_path() {
+        $request_uri = isset($_SERVER['REQUEST_URI']) ? (string) wp_unslash($_SERVER['REQUEST_URI']) : '';
+        $raw_path = (string) wp_parse_url($request_uri, PHP_URL_PATH);
+        $path = preg_replace('#/+#', '/', $raw_path);
+        if (!is_string($path) || $path === '') {
+            return '/';
+        }
+        $path = '/' . trim($path, '/');
+        if ($path !== '/') {
+            $path .= '/';
+        }
+        return strtolower($path);
+    }
+
+    private function runtime_request_path_match($normalized_path) {
+        return in_array($normalized_path, ['/binder-section/the-number-system/', '/wp/binder-section/the-number-system/'], true);
+    }
+
+    private function runtime_diagnostic_context() {
+        $path = $this->normalize_request_path();
+        $cap = is_user_logged_in() && current_user_can('manage_options');
+        $param = isset($_GET['mb_runtime_diagnostic']) && sanitize_text_field(wp_unslash($_GET['mb_runtime_diagnostic'])) === '1';
+
+        return [
+            'request_path' => $path,
+            'request_path_match' => $this->runtime_request_path_match($path),
+            'admin_capability_check' => $cap,
+            'diagnostic_parameter_present' => $param,
+        ];
+    }
+
+    private function runtime_diagnostic_allowed() {
+        $ctx = $this->runtime_diagnostic_context();
+        return $ctx['request_path_match'] && $ctx['admin_capability_check'] && $ctx['diagnostic_parameter_present'];
+    }
+
+    private function path_within_directory($path, $directory) {
+        if (!is_string($path) || $path === '' || !is_string($directory) || $directory === '') {
+            return false;
+        }
+        $normalized_path = wp_normalize_path($path);
+        $normalized_dir = trailingslashit(wp_normalize_path($directory));
+        return strpos($normalized_path, $normalized_dir) === 0;
+    }
+
+    public function capture_runtime_template_diagnostic($template) {
+        $template_path = is_string($template) ? $template : '';
+        $basename = $template_path !== '' ? wp_basename($template_path) : '';
+
+        $this->runtime_diag_data['final_template_captured'] = $template_path !== '';
+        $this->runtime_diag_data['final_template_basename'] = $basename;
+        $this->runtime_diag_data['final_template_in_child_theme'] = $this->path_within_directory($template_path, get_stylesheet_directory());
+        $this->runtime_diag_data['final_template_in_parent_theme'] = $this->path_within_directory($template_path, get_template_directory());
+        $this->runtime_diag_data['final_template_in_mathbinder_plugin'] = $this->path_within_directory($template_path, plugin_dir_path(__FILE__));
+        $this->runtime_diag_data['custom_taxonomy_template_selected'] = ($basename === 'taxonomy-mb_binder_section.php');
+
+        return $template;
+    }
+
+    public function capture_runtime_query_diagnostic() {
+        $ctx = $this->runtime_diagnostic_context();
+
+        $is_main_query = 'n/a';
+        if (isset($GLOBALS['wp_query']) && $GLOBALS['wp_query'] instanceof WP_Query) {
+            $is_main_query = $this->bool_string($GLOBALS['wp_query']->is_main_query());
+        }
+
+        $this->runtime_diag_data['request_path_match'] = $ctx['request_path_match'];
+        $this->runtime_diag_data['admin_capability_check'] = $ctx['admin_capability_check'];
+        $this->runtime_diag_data['diagnostic_parameter_present'] = $ctx['diagnostic_parameter_present'];
+        $this->runtime_diag_data['request_path'] = $ctx['request_path'];
+        $this->runtime_diag_data['is_admin'] = is_admin();
+        $this->runtime_diag_data['is_front_page'] = is_front_page();
+        $this->runtime_diag_data['is_home'] = is_home();
+        $this->runtime_diag_data['is_page'] = is_page();
+        $this->runtime_diag_data['is_single'] = is_single();
+        $this->runtime_diag_data['is_singular'] = is_singular();
+        $this->runtime_diag_data['is_archive'] = is_archive();
+        $this->runtime_diag_data['is_tax'] = is_tax();
+        $this->runtime_diag_data['is_tax_self_tax'] = is_tax(self::TAX);
+        $this->runtime_diag_data['is_category'] = is_category();
+        $this->runtime_diag_data['is_tag'] = is_tag();
+        $this->runtime_diag_data['is_post_type_archive'] = is_post_type_archive();
+        $this->runtime_diag_data['is_404'] = is_404();
+        $this->runtime_diag_data['is_search'] = is_search();
+        $this->runtime_diag_data['is_main_query'] = $is_main_query;
+        $this->runtime_diag_data['self_tax'] = self::TAX;
+        $this->runtime_diag_data['query_var_taxonomy'] = (string) get_query_var('taxonomy');
+        $this->runtime_diag_data['query_var_term'] = (string) get_query_var('term');
+        $this->runtime_diag_data['query_var_self_tax'] = (string) get_query_var(self::TAX);
+        $this->runtime_diag_data['query_var_post_type'] = (string) get_query_var('post_type');
+        $this->runtime_diag_data['query_var_name'] = (string) get_query_var('name');
+        $this->runtime_diag_data['query_var_pagename'] = (string) get_query_var('pagename');
+
+        $queried = get_queried_object();
+        $this->runtime_diag_data['queried_object_class'] = is_object($queried) ? get_class($queried) : '';
+        $this->runtime_diag_data['queried_term_id'] = (is_object($queried) && isset($queried->term_id)) ? (string) intval($queried->term_id) : '';
+        $this->runtime_diag_data['queried_taxonomy'] = (is_object($queried) && isset($queried->taxonomy)) ? (string) $queried->taxonomy : '';
+        $this->runtime_diag_data['queried_slug'] = (is_object($queried) && isset($queried->slug)) ? (string) $queried->slug : '';
+        $this->runtime_diag_data['queried_name'] = (is_object($queried) && isset($queried->name)) ? (string) $queried->name : '';
+        $this->runtime_diag_data['queried_post_id'] = (is_object($queried) && isset($queried->ID)) ? (string) intval($queried->ID) : '';
+        $this->runtime_diag_data['queried_post_type'] = (is_object($queried) && isset($queried->post_type)) ? (string) $queried->post_type : '';
+        $this->runtime_diag_data['queried_post_name'] = (is_object($queried) && isset($queried->post_name)) ? (string) $queried->post_name : '';
+    }
+
+    private function runtime_diag_rows($render_method) {
+        return [
+            'REQUEST_PATH_MATCH' => $this->bool_string(!empty($this->runtime_diag_data['request_path_match'])),
+            'ADMIN_CAPABILITY_CHECK' => $this->bool_string(!empty($this->runtime_diag_data['admin_capability_check'])),
+            'DIAGNOSTIC_PARAMETER_PRESENT' => $this->bool_string(!empty($this->runtime_diag_data['diagnostic_parameter_present'])),
+            'FINAL_TEMPLATE_CAPTURED' => $this->bool_string(!empty($this->runtime_diag_data['final_template_captured'])),
+            'FINAL_TEMPLATE_BASENAME' => (string) ($this->runtime_diag_data['final_template_basename'] ?? ''),
+            'FINAL_TEMPLATE_IN_CHILD_THEME' => $this->bool_string(!empty($this->runtime_diag_data['final_template_in_child_theme'])),
+            'FINAL_TEMPLATE_IN_PARENT_THEME' => $this->bool_string(!empty($this->runtime_diag_data['final_template_in_parent_theme'])),
+            'FINAL_TEMPLATE_IN_MATHBINDER_PLUGIN' => $this->bool_string(!empty($this->runtime_diag_data['final_template_in_mathbinder_plugin'])),
+            'CUSTOM_TAXONOMY_TEMPLATE_SELECTED' => $this->bool_string(!empty($this->runtime_diag_data['custom_taxonomy_template_selected'])),
+            'PANEL_RENDER_METHOD' => $render_method,
+            'ACTIVE_PLUGIN_VERSION' => self::VERSION,
+            'REQUEST_PATH' => (string) ($this->runtime_diag_data['request_path'] ?? ''),
+            'is_admin()' => $this->bool_string(!empty($this->runtime_diag_data['is_admin'])),
+            'is_front_page()' => $this->bool_string(!empty($this->runtime_diag_data['is_front_page'])),
+            'is_home()' => $this->bool_string(!empty($this->runtime_diag_data['is_home'])),
+            'is_page()' => $this->bool_string(!empty($this->runtime_diag_data['is_page'])),
+            'is_single()' => $this->bool_string(!empty($this->runtime_diag_data['is_single'])),
+            'is_singular()' => $this->bool_string(!empty($this->runtime_diag_data['is_singular'])),
+            'is_archive()' => $this->bool_string(!empty($this->runtime_diag_data['is_archive'])),
+            'is_tax()' => $this->bool_string(!empty($this->runtime_diag_data['is_tax'])),
+            'is_tax(self::TAX)' => $this->bool_string(!empty($this->runtime_diag_data['is_tax_self_tax'])),
+            'is_category()' => $this->bool_string(!empty($this->runtime_diag_data['is_category'])),
+            'is_tag()' => $this->bool_string(!empty($this->runtime_diag_data['is_tag'])),
+            'is_post_type_archive()' => $this->bool_string(!empty($this->runtime_diag_data['is_post_type_archive'])),
+            'is_404()' => $this->bool_string(!empty($this->runtime_diag_data['is_404'])),
+            'is_search()' => $this->bool_string(!empty($this->runtime_diag_data['is_search'])),
+            'is_main_query()' => (string) ($this->runtime_diag_data['is_main_query'] ?? 'n/a'),
+            'self::TAX' => (string) ($this->runtime_diag_data['self_tax'] ?? ''),
+            'get_query_var("taxonomy")' => (string) ($this->runtime_diag_data['query_var_taxonomy'] ?? ''),
+            'get_query_var("term")' => (string) ($this->runtime_diag_data['query_var_term'] ?? ''),
+            'get_query_var(self::TAX)' => (string) ($this->runtime_diag_data['query_var_self_tax'] ?? ''),
+            'get_query_var("post_type")' => (string) ($this->runtime_diag_data['query_var_post_type'] ?? ''),
+            'get_query_var("name")' => (string) ($this->runtime_diag_data['query_var_name'] ?? ''),
+            'get_query_var("pagename")' => (string) ($this->runtime_diag_data['query_var_pagename'] ?? ''),
+            'queried_object class' => (string) ($this->runtime_diag_data['queried_object_class'] ?? ''),
+            'queried_object term_id' => (string) ($this->runtime_diag_data['queried_term_id'] ?? ''),
+            'queried_object taxonomy' => (string) ($this->runtime_diag_data['queried_taxonomy'] ?? ''),
+            'queried_object slug' => (string) ($this->runtime_diag_data['queried_slug'] ?? ''),
+            'queried_object name' => (string) ($this->runtime_diag_data['queried_name'] ?? ''),
+            'queried_object post ID' => (string) ($this->runtime_diag_data['queried_post_id'] ?? ''),
+            'queried_object post type' => (string) ($this->runtime_diag_data['queried_post_type'] ?? ''),
+            'queried_object post name' => (string) ($this->runtime_diag_data['queried_post_name'] ?? ''),
+        ];
+    }
+
+    private function maybe_render_runtime_diagnostic_panel($render_method) {
+        if ($this->runtime_diag_panel_rendered || !$this->runtime_diagnostic_allowed()) {
+            return;
+        }
+        $rows = $this->runtime_diag_rows($render_method);
+        $this->runtime_diag_panel_rendered = true;
+
+        echo '<div style="position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;max-width:980px;max-height:46vh;margin:0 auto;padding:12px;border:2px solid #2b2b2b;background:#fffef5;color:#111;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:auto;font:13px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;">';
+        echo '<div style="font-weight:700;font-size:16px;margin-bottom:8px;">' . esc_html('MathBinder Runtime Diagnostic 27.0.4') . '</div>';
+        foreach ($rows as $label => $value) {
+            echo '<div style="display:flex;gap:8px;border-top:1px solid #d9d6c7;padding:4px 0;">';
+            echo '<div style="min-width:290px;font-weight:600;">' . esc_html($label) . '</div>';
+            echo '<div style="word-break:break-word;">' . esc_html((string) $value) . '</div>';
+            echo '</div>';
+        }
+        echo '</div>';
+    }
+
+    public function render_runtime_diagnostic_panel_footer() {
+        $this->maybe_render_runtime_diagnostic_panel('wp_footer');
+    }
+
+    public function render_runtime_diagnostic_panel_shutdown() {
+        $this->maybe_render_runtime_diagnostic_panel('shutdown');
     }
 
     public function lines($text) {
