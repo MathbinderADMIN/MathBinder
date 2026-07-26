@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.0.7
+ * Version: 27.0.8
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -26,7 +26,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.0.7';
+    const VERSION = '27.0.8';
 
     private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
@@ -69,6 +69,7 @@ final class MathBinder_Core {
         add_action('admin_head', [$this, 'hide_lesson_builder_notices']);
         add_action('admin_init', [$this, 'maybe_upgrade']);
         add_action('wp', [$this, 'capture_runtime_query_diagnostic'], PHP_INT_MAX);
+        add_action('template_redirect', [$this, 'apply_pagelayer_taxonomy_compatibility'], 1);
         add_action('wp_footer', [$this, 'render_runtime_diagnostic_panel_footer'], PHP_INT_MAX);
         add_action('shutdown', [$this, 'render_runtime_diagnostic_panel_shutdown'], PHP_INT_MAX);
         add_filter('body_class', [$this, 'body_classes']);
@@ -1105,6 +1106,46 @@ final class MathBinder_Core {
         return $ctx['request_path_match'] && $ctx['admin_capability_check'] && $ctx['diagnostic_parameter_present'];
     }
 
+    public function apply_pagelayer_taxonomy_compatibility() {
+        if (is_admin()) {
+            return;
+        }
+        if ((function_exists('wp_doing_ajax') && wp_doing_ajax()) || (defined('DOING_AJAX') && DOING_AJAX)) {
+            return;
+        }
+        if ((defined('REST_REQUEST') && REST_REQUEST) || (function_exists('wp_is_json_request') && wp_is_json_request())) {
+            return;
+        }
+        if ((function_exists('wp_doing_cron') && wp_doing_cron()) || (defined('DOING_CRON') && DOING_CRON)) {
+            return;
+        }
+
+        global $pagenow;
+        if (is_string($pagenow) && $pagenow === 'wp-login.php') {
+            return;
+        }
+
+        if (!is_tax(self::TAX)) {
+            return;
+        }
+
+        $present_before = has_filter('template_include', 'pagelayer_template_include');
+        $attempted = ($present_before === 1000);
+        $removed = false;
+
+        if ($attempted) {
+            $removed = remove_filter('template_include', 'pagelayer_template_include', 1000) === true;
+        }
+
+        if ($this->runtime_diagnostic_allowed()) {
+            $this->runtime_diag_data['pagelayer_callback_present_before_compatibility'] = ($present_before === 1000);
+            $this->runtime_diag_data['pagelayer_callback_removal_attempted'] = $attempted;
+            $this->runtime_diag_data['pagelayer_callback_removal_succeeded'] = $removed;
+            $present_after = has_filter('template_include', 'pagelayer_template_include');
+            $this->runtime_diag_data['pagelayer_callback_present_after_compatibility'] = ($present_after === 1000);
+        }
+    }
+
     private function safe_query_var_value($value) {
         if (is_null($value)) {
             return '';
@@ -1300,6 +1341,10 @@ final class MathBinder_Core {
             'PRIORITY_1000_MATHBINDER_POSITION_AT_RENDER' => (string) ($this->runtime_diag_data['priority_1000_mathbinder_position_at_render'] ?? ''),
             'PRIORITY_1000_REGISTRY_CAPTURED_AT_RENDER' => $this->bool_string(!empty($this->runtime_diag_data['priority_1000_registry_captured_at_render'])),
             'PRIORITY_1000_REGISTRY_CHANGED_BY_RENDER' => $this->bool_string(!empty($this->runtime_diag_data['priority_1000_registry_changed_by_render'])),
+            'PAGELAYER_CALLBACK_PRESENT_BEFORE_COMPATIBILITY' => $this->bool_string(!empty($this->runtime_diag_data['pagelayer_callback_present_before_compatibility'])),
+            'PAGELAYER_CALLBACK_REMOVAL_ATTEMPTED' => $this->bool_string(!empty($this->runtime_diag_data['pagelayer_callback_removal_attempted'])),
+            'PAGELAYER_CALLBACK_REMOVAL_SUCCEEDED' => $this->bool_string(!empty($this->runtime_diag_data['pagelayer_callback_removal_succeeded'])),
+            'PAGELAYER_CALLBACK_PRESENT_AFTER_COMPATIBILITY' => $this->bool_string(!empty($this->runtime_diag_data['pagelayer_callback_present_after_compatibility'])),
             'PHP_INT_MAX_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['php_int_max_executed'])),
             'PHP_INT_MAX_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['php_int_max_callback_count'] ?? 0)),
             'PHP_INT_MAX_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['php_int_max_incoming_basename'] ?? ''),
