@@ -29,6 +29,7 @@ foreach ($published_pages as $page) {
 }
 ?>
 <main class="mb-page-wrap mb-section-archive">
+    <div class="mb-template-diagnostic" data-mb-template="taxonomy-mb_binder_section" style="max-width: 920px; margin: 12px auto 16px; padding: 8px 12px; border: 1px solid #d0b96a; background: #fff6cc; color: #2f2a1f; text-align: center; font-size: 14px; line-height: 1.35;">MathBinder section template active — diagnostic 27.0.3</div>
     <nav class="mb-breadcrumbs" aria-label="Breadcrumb">
         <a href="<?php echo esc_url(home_url('/')); ?>">Home</a><span>›</span>
         <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Binder Topics</a><span>›</span>

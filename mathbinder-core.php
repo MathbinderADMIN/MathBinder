@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.0.2
+ * Version: 27.0.3
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -26,7 +26,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.0.2';
+    const VERSION = '27.0.3';
 
     public function __construct() {
         add_action('init', [$this, 'register_content_types']);
@@ -34,7 +34,7 @@ final class MathBinder_Core {
         add_action('save_post_' . self::CPT, [$this, 'save_meta']);
         add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
-        add_filter('template_include', [$this, 'load_single_template']);
+        add_filter('template_include', [$this, 'load_single_template'], 999);
         add_shortcode('mathbinder_topics', [$this, 'topics_shortcode']);
         add_shortcode('mathbinder_home', [$this, 'homepage_shortcode']);
         add_shortcode('mathbinder_progress', [$this, 'progress_shortcode']);
@@ -788,7 +788,12 @@ final class MathBinder_Core {
 
     public function load_single_template($template) {
         if (is_singular(self::CPT)) return plugin_dir_path(__FILE__) . 'single-mb_binder_page.php';
-        if (is_tax(self::TAX)) return plugin_dir_path(__FILE__) . 'taxonomy-mb_binder_section.php';
+        if (is_tax(self::TAX)) {
+            $taxonomy_template = plugin_dir_path(__FILE__) . 'taxonomy-mb_binder_section.php';
+            if (file_exists($taxonomy_template)) {
+                return $taxonomy_template;
+            }
+        }
         return $template;
     }
 
