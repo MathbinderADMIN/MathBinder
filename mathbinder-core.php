@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.0.6
+ * Version: 27.0.7
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -26,7 +26,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.0.6';
+    const VERSION = '27.0.7';
 
     private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
@@ -41,6 +41,7 @@ final class MathBinder_Core {
         $this->runtime_instance_marker = 'runtime-instance-' . strval(self::$runtime_instance_sequence);
         $this->constructor_instance_marker = $this->runtime_instance_marker;
         $this->runtime_diag_data['constructor_instance_marker'] = $this->runtime_instance_marker;
+        $this->runtime_diag_data['last_mathbinder_trace_point'] = 'constructor';
 
         add_action('init', [$this, 'register_content_types']);
         add_action('add_meta_boxes', [$this, 'add_meta_boxes']);
@@ -829,6 +830,7 @@ final class MathBinder_Core {
         }
 
         if ($this->runtime_diagnostic_allowed()) {
+            $this->set_last_mathbinder_trace_point('priority_999');
             $load_callback_count = intval($this->runtime_diag_data['load_single_template_callback_count'] ?? 0) + 1;
             $return_basename = (is_string($selected_template) && $selected_template !== '') ? wp_basename($selected_template) : '';
 
@@ -859,6 +861,8 @@ final class MathBinder_Core {
             return $template;
         }
 
+        $this->set_last_mathbinder_trace_point('priority_998');
+
         $incoming_basename = (is_string($template) && $template !== '') ? wp_basename($template) : '';
         $count = intval($this->runtime_diag_data['priority_998_callback_count'] ?? 0) + 1;
 
@@ -876,6 +880,8 @@ final class MathBinder_Core {
         if (!$this->runtime_diagnostic_allowed()) {
             return $template;
         }
+
+        $this->set_last_mathbinder_trace_point('priority_1000');
 
         $incoming_basename = (is_string($template) && $template !== '') ? wp_basename($template) : '';
         $count = intval($this->runtime_diag_data['priority_1000_callback_count'] ?? 0) + 1;
@@ -895,6 +901,8 @@ final class MathBinder_Core {
             return $template;
         }
 
+        $this->set_last_mathbinder_trace_point('priority_1001');
+
         $incoming_basename = (is_string($template) && $template !== '') ? wp_basename($template) : '';
         $count = intval($this->runtime_diag_data['priority_1001_callback_count'] ?? 0) + 1;
 
@@ -910,6 +918,155 @@ final class MathBinder_Core {
 
     private function bool_string($value) {
         return $value ? 'true' : 'false';
+    }
+
+    private function set_last_mathbinder_trace_point($point) {
+        if (!is_string($point) || $point === '') {
+            return;
+        }
+        $this->runtime_diag_data['last_mathbinder_trace_point'] = $point;
+    }
+
+    private function safe_callback_label($callback) {
+        if (is_string($callback) && $callback !== '') {
+            return 'function:' . $callback;
+        }
+
+        if (is_array($callback) && count($callback) >= 2) {
+            $target = $callback[0];
+            $method = is_string($callback[1]) ? $callback[1] : '';
+            if (is_string($target) && $target !== '' && $method !== '') {
+                return 'static:' . $target . '::' . $method;
+            }
+            if (is_object($target) && $method !== '') {
+                return 'object:' . get_class($target) . '::' . $method;
+            }
+            return 'unknown';
+        }
+
+        if ($callback instanceof Closure) {
+            return 'closure';
+        }
+
+        if (is_object($callback)) {
+            if (is_callable([$callback, '__invoke'])) {
+                return 'invokable:' . get_class($callback);
+            }
+            return 'unknown';
+        }
+
+        return 'unknown';
+    }
+
+    private function read_priority_1000_template_registry_snapshot() {
+        $result = [
+            'captured' => false,
+            'count' => 0,
+            'order' => '',
+            'mathbinder_position' => '',
+        ];
+
+        if (!isset($GLOBALS['wp_filter']) || !is_array($GLOBALS['wp_filter']) || !isset($GLOBALS['wp_filter']['template_include'])) {
+            return $result;
+        }
+
+        $hook = $GLOBALS['wp_filter']['template_include'];
+        if (!is_object($hook) || !isset($hook->callbacks) || !is_array($hook->callbacks) || !isset($hook->callbacks[1000]) || !is_array($hook->callbacks[1000])) {
+            return $result;
+        }
+
+        $labels = [];
+        $positions = [];
+        $position = 0;
+
+        foreach ($hook->callbacks[1000] as $entry) {
+            if (!is_array($entry) || !array_key_exists('function', $entry)) {
+                continue;
+            }
+            $position++;
+            $label = $this->safe_callback_label($entry['function']);
+            $labels[] = $position . '=' . $label;
+            if ($label === 'object:MathBinder_Core::trace_template_filter_1000') {
+                $positions[] = strval($position);
+            }
+        }
+
+        $result['captured'] = true;
+        $result['count'] = $position;
+        $result['order'] = implode(' | ', $labels);
+        $result['mathbinder_position'] = implode(',', $positions);
+        return $result;
+    }
+
+    private function capture_priority_1000_registry_before_filter() {
+        if (!$this->runtime_diagnostic_allowed()) {
+            return;
+        }
+        $snapshot = $this->read_priority_1000_template_registry_snapshot();
+        $this->runtime_diag_data['priority_1000_registry_captured_before_filter'] = $snapshot['captured'];
+        $this->runtime_diag_data['priority_1000_callback_count_before_filter'] = intval($snapshot['count']);
+        $this->runtime_diag_data['priority_1000_callback_order_before_filter'] = (string) $snapshot['order'];
+        $this->runtime_diag_data['priority_1000_mathbinder_position_before_filter'] = (string) $snapshot['mathbinder_position'];
+    }
+
+    private function capture_priority_1000_registry_at_render() {
+        if (!$this->runtime_diagnostic_allowed()) {
+            return;
+        }
+        $snapshot = $this->read_priority_1000_template_registry_snapshot();
+        $this->runtime_diag_data['priority_1000_registry_captured_at_render'] = $snapshot['captured'];
+        $this->runtime_diag_data['priority_1000_callback_count_at_render'] = intval($snapshot['count']);
+        $this->runtime_diag_data['priority_1000_callback_order_at_render'] = (string) $snapshot['order'];
+        $this->runtime_diag_data['priority_1000_mathbinder_position_at_render'] = (string) $snapshot['mathbinder_position'];
+
+        $before_count = intval($this->runtime_diag_data['priority_1000_callback_count_before_filter'] ?? 0);
+        $before_order = (string) ($this->runtime_diag_data['priority_1000_callback_order_before_filter'] ?? '');
+        $this->runtime_diag_data['priority_1000_registry_changed_by_render'] = (
+            $before_count !== intval($snapshot['count']) ||
+            $before_order !== (string) $snapshot['order']
+        );
+    }
+
+    private function sanitize_shutdown_error_message($message) {
+        if (!is_string($message) || $message === '') {
+            return '';
+        }
+
+        $safe = preg_replace('/[A-Za-z]:\\\\[^\s"\']+/', '[path]', $message);
+        $safe = preg_replace('/\\\\\\\\[^\s"\']+/', '[path]', $safe);
+        $safe = preg_replace('#/(?:[^\s"\']+/)+[^\s"\']+#', '[path]', $safe);
+        if (!is_string($safe)) {
+            return '';
+        }
+
+        if (preg_match('/[A-Za-z]:\\\\[^\s"\']+/', $safe) || preg_match('/\\\\\\\\[^\s"\']+/', $safe) || preg_match('#/(?:[^\s"\']+/)+[^\s"\']+#', $safe)) {
+            return '';
+        }
+
+        if (strlen($safe) > 240) {
+            $safe = substr($safe, 0, 240);
+        }
+
+        return $safe;
+    }
+
+    private function capture_shutdown_error_diagnostic() {
+        if (!$this->runtime_diagnostic_allowed()) {
+            return;
+        }
+
+        $error = error_get_last();
+        $fatal_types = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR];
+        $is_fatal = is_array($error) && isset($error['type']) && in_array(intval($error['type']), $fatal_types, true);
+
+        $this->runtime_diag_data['shutdown_error_present'] = $is_fatal;
+        $this->runtime_diag_data['shutdown_error_type'] = $is_fatal ? strval(intval($error['type'])) : '';
+
+        $safe_message = '';
+        if ($is_fatal && isset($error['message']) && is_string($error['message'])) {
+            $safe_message = $this->sanitize_shutdown_error_message($error['message']);
+        }
+        $this->runtime_diag_data['shutdown_error_message_safe'] = $safe_message;
     }
 
     private function normalize_request_path() {
@@ -978,6 +1135,8 @@ final class MathBinder_Core {
             return $template;
         }
 
+        $this->set_last_mathbinder_trace_point('php_int_max');
+
         $template_path = is_string($template) ? $template : '';
         $basename = $template_path !== '' ? wp_basename($template_path) : '';
         $capture_callback_count = intval($this->runtime_diag_data['runtime_capture_callback_count'] ?? 0) + 1;
@@ -1009,6 +1168,8 @@ final class MathBinder_Core {
         if (!$this->runtime_diagnostic_allowed()) {
             return;
         }
+
+        $this->capture_priority_1000_registry_before_filter();
 
         $ctx = $this->runtime_diagnostic_context();
 
@@ -1056,6 +1217,8 @@ final class MathBinder_Core {
     }
 
     private function runtime_diag_rows($render_method) {
+        $this->capture_priority_1000_registry_at_render();
+
         $load_998_priority = has_filter('template_include', [$this, 'trace_template_filter_998']);
         $load_999_priority = has_filter('template_include', [$this, 'load_single_template']);
         $load_1000_priority = has_filter('template_include', [$this, 'trace_template_filter_1000']);
@@ -1125,9 +1288,18 @@ final class MathBinder_Core {
             'PRIORITY_1000_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['priority_1000_executed'])),
             'PRIORITY_1000_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['priority_1000_callback_count'] ?? 0)),
             'PRIORITY_1000_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['priority_1000_incoming_basename'] ?? ''),
+            'PRIORITY_1000_CALLBACK_COUNT_BEFORE_FILTER' => strval(intval($this->runtime_diag_data['priority_1000_callback_count_before_filter'] ?? 0)),
+            'PRIORITY_1000_CALLBACK_ORDER_BEFORE_FILTER' => (string) ($this->runtime_diag_data['priority_1000_callback_order_before_filter'] ?? ''),
+            'PRIORITY_1000_MATHBINDER_POSITION_BEFORE_FILTER' => (string) ($this->runtime_diag_data['priority_1000_mathbinder_position_before_filter'] ?? ''),
+            'PRIORITY_1000_REGISTRY_CAPTURED_BEFORE_FILTER' => $this->bool_string(!empty($this->runtime_diag_data['priority_1000_registry_captured_before_filter'])),
             'PRIORITY_1001_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['priority_1001_executed'])),
             'PRIORITY_1001_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['priority_1001_callback_count'] ?? 0)),
             'PRIORITY_1001_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['priority_1001_incoming_basename'] ?? ''),
+            'PRIORITY_1000_CALLBACK_COUNT_AT_RENDER' => strval(intval($this->runtime_diag_data['priority_1000_callback_count_at_render'] ?? 0)),
+            'PRIORITY_1000_CALLBACK_ORDER_AT_RENDER' => (string) ($this->runtime_diag_data['priority_1000_callback_order_at_render'] ?? ''),
+            'PRIORITY_1000_MATHBINDER_POSITION_AT_RENDER' => (string) ($this->runtime_diag_data['priority_1000_mathbinder_position_at_render'] ?? ''),
+            'PRIORITY_1000_REGISTRY_CAPTURED_AT_RENDER' => $this->bool_string(!empty($this->runtime_diag_data['priority_1000_registry_captured_at_render'])),
+            'PRIORITY_1000_REGISTRY_CHANGED_BY_RENDER' => $this->bool_string(!empty($this->runtime_diag_data['priority_1000_registry_changed_by_render'])),
             'PHP_INT_MAX_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['php_int_max_executed'])),
             'PHP_INT_MAX_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['php_int_max_callback_count'] ?? 0)),
             'PHP_INT_MAX_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['php_int_max_incoming_basename'] ?? ''),
@@ -1152,6 +1324,10 @@ final class MathBinder_Core {
             'DIAGNOSTIC_STORAGE_SCOPE' => 'per-instance',
             'PANEL_RENDER_LATCH_SCOPE' => 'class-wide',
             'CURRENT_INSTANCE_MARKER' => $this->runtime_instance_marker,
+            'SHUTDOWN_ERROR_PRESENT' => $this->bool_string(!empty($this->runtime_diag_data['shutdown_error_present'])),
+            'SHUTDOWN_ERROR_TYPE' => (string) ($this->runtime_diag_data['shutdown_error_type'] ?? ''),
+            'SHUTDOWN_ERROR_MESSAGE_SAFE' => (string) ($this->runtime_diag_data['shutdown_error_message_safe'] ?? ''),
+            'LAST_MATHBINDER_TRACE_POINT' => (string) ($this->runtime_diag_data['last_mathbinder_trace_point'] ?? ''),
             'PRIORITY_998_REGISTERED_AT_RENDER' => $this->bool_string($load_998_registered),
             'PRIORITY_998_REGISTERED_PRIORITY' => $load_998_priority_text,
             'PRIORITY_999_REGISTERED_AT_RENDER' => $this->bool_string($load_999_registered),
@@ -1227,12 +1403,13 @@ final class MathBinder_Core {
         if ($this->runtime_diag_panel_rendered || !$this->runtime_diagnostic_allowed()) {
             return;
         }
+        $this->set_last_mathbinder_trace_point('panel_renderer');
         $this->runtime_diag_data['panel_instance_marker'] = $this->runtime_instance_marker;
         $rows = $this->runtime_diag_rows($render_method);
         $this->runtime_diag_panel_rendered = true;
 
         echo '<div style="position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;max-width:980px;max-height:46vh;margin:0 auto;padding:12px;border:2px solid #2b2b2b;background:#fffef5;color:#111;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:auto;font:13px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;">';
-        echo '<div style="font-weight:700;font-size:16px;margin-bottom:8px;">' . esc_html('MathBinder Runtime Diagnostic 27.0.6') . '</div>';
+        echo '<div style="font-weight:700;font-size:16px;margin-bottom:8px;">' . esc_html('MathBinder Runtime Diagnostic 27.0.7') . '</div>';
         foreach ($rows as $label => $value) {
             echo '<div style="display:flex;gap:8px;border-top:1px solid #d9d6c7;padding:4px 0;">';
             echo '<div style="min-width:290px;font-weight:600;">' . esc_html($label) . '</div>';
@@ -1247,6 +1424,10 @@ final class MathBinder_Core {
     }
 
     public function render_runtime_diagnostic_panel_shutdown() {
+        if ($this->runtime_diagnostic_allowed()) {
+            $this->set_last_mathbinder_trace_point('shutdown');
+            $this->capture_shutdown_error_diagnostic();
+        }
         $this->maybe_render_runtime_diagnostic_panel('shutdown');
     }
 
