@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.0.5
+ * Version: 27.0.6
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -26,23 +26,31 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.0.5';
+    const VERSION = '27.0.6';
 
+    private static $runtime_diag_state = [];
+    private static $runtime_diag_panel_rendered_state = false;
     private $runtime_diag_data = [];
     private $runtime_diag_panel_rendered = false;
     private $runtime_instance_marker = '';
     private $constructor_instance_marker = '';
 
     public function __construct() {
+        $this->runtime_diag_data =& self::$runtime_diag_state;
+        $this->runtime_diag_panel_rendered =& self::$runtime_diag_panel_rendered_state;
         $this->runtime_instance_marker = 'runtime-instance-active';
         $this->constructor_instance_marker = $this->runtime_instance_marker;
+        $this->runtime_diag_data['constructor_instance_marker'] = $this->runtime_instance_marker;
 
         add_action('init', [$this, 'register_content_types']);
         add_action('add_meta_boxes', [$this, 'add_meta_boxes']);
         add_action('save_post_' . self::CPT, [$this, 'save_meta']);
         add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_assets']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
+        add_filter('template_include', [$this, 'trace_template_filter_998'], 998);
         add_filter('template_include', [$this, 'load_single_template'], 999);
+        add_filter('template_include', [$this, 'trace_template_filter_1000'], 1000);
+        add_filter('template_include', [$this, 'trace_template_filter_1001'], 1001);
         add_filter('template_include', [$this, 'capture_runtime_template_diagnostic'], PHP_INT_MAX);
         add_shortcode('mathbinder_topics', [$this, 'topics_shortcode']);
         add_shortcode('mathbinder_home', [$this, 'homepage_shortcode']);
@@ -824,6 +832,14 @@ final class MathBinder_Core {
             $load_callback_count = intval($this->runtime_diag_data['load_single_template_callback_count'] ?? 0) + 1;
             $return_basename = (is_string($selected_template) && $selected_template !== '') ? wp_basename($selected_template) : '';
 
+            $this->runtime_diag_data['priority_999_executed'] = true;
+            $this->runtime_diag_data['priority_999_callback_count'] = $load_callback_count;
+            $this->runtime_diag_data['priority_999_incoming_basename'] = $incoming_basename;
+            $this->runtime_diag_data['priority_999_return_basename'] = $return_basename;
+            $this->runtime_diag_data['priority_999_return_source'] = $return_source;
+            $this->runtime_diag_data['template_after_999_basename'] = $return_basename;
+            $this->runtime_diag_data['filter_chain_reached_999'] = true;
+
             $this->runtime_diag_data['load_single_template_executed'] = true;
             $this->runtime_diag_data['load_single_template_callback_count'] = $load_callback_count;
             $this->runtime_diag_data['load_single_template_incoming_basename'] = $incoming_basename;
@@ -836,6 +852,60 @@ final class MathBinder_Core {
         }
 
         return $selected_template;
+    }
+
+    public function trace_template_filter_998($template) {
+        if (!$this->runtime_diagnostic_allowed()) {
+            return $template;
+        }
+
+        $incoming_basename = (is_string($template) && $template !== '') ? wp_basename($template) : '';
+        $count = intval($this->runtime_diag_data['priority_998_callback_count'] ?? 0) + 1;
+
+        $this->runtime_diag_data['priority_998_executed'] = true;
+        $this->runtime_diag_data['priority_998_callback_count'] = $count;
+        $this->runtime_diag_data['priority_998_incoming_basename'] = $incoming_basename;
+        $this->runtime_diag_data['template_after_998_basename'] = $incoming_basename;
+        $this->runtime_diag_data['filter_chain_reached_998'] = true;
+        $this->runtime_diag_data['priority_998_instance_marker'] = $this->runtime_instance_marker;
+
+        return $template;
+    }
+
+    public function trace_template_filter_1000($template) {
+        if (!$this->runtime_diagnostic_allowed()) {
+            return $template;
+        }
+
+        $incoming_basename = (is_string($template) && $template !== '') ? wp_basename($template) : '';
+        $count = intval($this->runtime_diag_data['priority_1000_callback_count'] ?? 0) + 1;
+
+        $this->runtime_diag_data['priority_1000_executed'] = true;
+        $this->runtime_diag_data['priority_1000_callback_count'] = $count;
+        $this->runtime_diag_data['priority_1000_incoming_basename'] = $incoming_basename;
+        $this->runtime_diag_data['template_at_1000_basename'] = $incoming_basename;
+        $this->runtime_diag_data['filter_chain_reached_1000'] = true;
+        $this->runtime_diag_data['priority_1000_instance_marker'] = $this->runtime_instance_marker;
+
+        return $template;
+    }
+
+    public function trace_template_filter_1001($template) {
+        if (!$this->runtime_diagnostic_allowed()) {
+            return $template;
+        }
+
+        $incoming_basename = (is_string($template) && $template !== '') ? wp_basename($template) : '';
+        $count = intval($this->runtime_diag_data['priority_1001_callback_count'] ?? 0) + 1;
+
+        $this->runtime_diag_data['priority_1001_executed'] = true;
+        $this->runtime_diag_data['priority_1001_callback_count'] = $count;
+        $this->runtime_diag_data['priority_1001_incoming_basename'] = $incoming_basename;
+        $this->runtime_diag_data['template_at_1001_basename'] = $incoming_basename;
+        $this->runtime_diag_data['filter_chain_reached_1001'] = true;
+        $this->runtime_diag_data['priority_1001_instance_marker'] = $this->runtime_instance_marker;
+
+        return $template;
     }
 
     private function bool_string($value) {
@@ -912,6 +982,13 @@ final class MathBinder_Core {
         $basename = $template_path !== '' ? wp_basename($template_path) : '';
         $capture_callback_count = intval($this->runtime_diag_data['runtime_capture_callback_count'] ?? 0) + 1;
 
+        $this->runtime_diag_data['php_int_max_executed'] = true;
+        $this->runtime_diag_data['php_int_max_callback_count'] = $capture_callback_count;
+        $this->runtime_diag_data['php_int_max_incoming_basename'] = $basename;
+        $this->runtime_diag_data['php_int_max_instance_marker'] = $this->runtime_instance_marker;
+        $this->runtime_diag_data['filter_chain_reached_php_int_max'] = true;
+        $this->runtime_diag_data['template_at_php_int_max_basename'] = $basename;
+
         $this->runtime_diag_data['runtime_capture_executed'] = true;
         $this->runtime_diag_data['runtime_capture_callback_count'] = $capture_callback_count;
         $this->runtime_diag_data['runtime_capture_incoming_basename'] = $basename;
@@ -979,28 +1056,91 @@ final class MathBinder_Core {
     }
 
     private function runtime_diag_rows($render_method) {
-        $load_filter_priority = has_filter('template_include', [$this, 'load_single_template']);
+        $load_998_priority = has_filter('template_include', [$this, 'trace_template_filter_998']);
+        $load_999_priority = has_filter('template_include', [$this, 'load_single_template']);
+        $load_1000_priority = has_filter('template_include', [$this, 'trace_template_filter_1000']);
+        $load_1001_priority = has_filter('template_include', [$this, 'trace_template_filter_1001']);
         $capture_filter_priority = has_filter('template_include', [$this, 'capture_runtime_template_diagnostic']);
 
-        $load_filter_registered = ($load_filter_priority !== false);
+        $load_998_registered = ($load_998_priority !== false);
+        $load_999_registered = ($load_999_priority !== false);
+        $load_1000_registered = ($load_1000_priority !== false);
+        $load_1001_registered = ($load_1001_priority !== false);
         $capture_filter_registered = ($capture_filter_priority !== false);
 
-        $load_filter_priority_text = $load_filter_registered ? strval(intval($load_filter_priority)) : '';
+        $load_998_priority_text = $load_998_registered ? strval(intval($load_998_priority)) : '';
+        $load_999_priority_text = $load_999_registered ? strval(intval($load_999_priority)) : '';
+        $load_1000_priority_text = $load_1000_registered ? strval(intval($load_1000_priority)) : '';
+        $load_1001_priority_text = $load_1001_registered ? strval(intval($load_1001_priority)) : '';
         $capture_filter_priority_text = '';
         if ($capture_filter_registered) {
             $capture_filter_priority_text = intval($capture_filter_priority) === PHP_INT_MAX ? 'PHP_INT_MAX' : strval(intval($capture_filter_priority));
         }
 
         $constructor_marker = $this->constructor_instance_marker;
+        $priority_998_marker = (string) ($this->runtime_diag_data['priority_998_instance_marker'] ?? '');
+        $priority_999_marker = (string) ($this->runtime_diag_data['load_callback_instance_marker'] ?? '');
+        $priority_1000_marker = (string) ($this->runtime_diag_data['priority_1000_instance_marker'] ?? '');
+        $priority_1001_marker = (string) ($this->runtime_diag_data['priority_1001_instance_marker'] ?? '');
+        $php_int_max_marker = (string) ($this->runtime_diag_data['php_int_max_instance_marker'] ?? '');
         $load_marker = (string) ($this->runtime_diag_data['load_callback_instance_marker'] ?? '');
         $capture_marker = (string) ($this->runtime_diag_data['capture_callback_instance_marker'] ?? '');
         $panel_marker = (string) ($this->runtime_diag_data['panel_instance_marker'] ?? '');
-        $markers_match = ($constructor_marker !== '' && $constructor_marker === $load_marker && $constructor_marker === $capture_marker && $constructor_marker === $panel_marker);
+        $markers_match = ($constructor_marker !== '' && $constructor_marker === $priority_998_marker && $constructor_marker === $priority_999_marker && $constructor_marker === $priority_1000_marker && $constructor_marker === $priority_1001_marker && $constructor_marker === $php_int_max_marker && $constructor_marker === $panel_marker);
 
         return [
             'REQUEST_PATH_MATCH' => $this->bool_string(!empty($this->runtime_diag_data['request_path_match'])),
             'ADMIN_CAPABILITY_CHECK' => $this->bool_string(!empty($this->runtime_diag_data['admin_capability_check'])),
             'DIAGNOSTIC_PARAMETER_PRESENT' => $this->bool_string(!empty($this->runtime_diag_data['diagnostic_parameter_present'])),
+            'PRIORITY_998_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['priority_998_executed'])),
+            'PRIORITY_998_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['priority_998_callback_count'] ?? 0)),
+            'PRIORITY_998_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['priority_998_incoming_basename'] ?? ''),
+            'PRIORITY_999_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['priority_999_executed'])),
+            'PRIORITY_999_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['priority_999_callback_count'] ?? 0)),
+            'PRIORITY_999_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['priority_999_incoming_basename'] ?? ''),
+            'PRIORITY_999_RETURN_BASENAME' => (string) ($this->runtime_diag_data['priority_999_return_basename'] ?? ''),
+            'PRIORITY_999_RETURN_SOURCE' => (string) ($this->runtime_diag_data['priority_999_return_source'] ?? ''),
+            'PRIORITY_1000_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['priority_1000_executed'])),
+            'PRIORITY_1000_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['priority_1000_callback_count'] ?? 0)),
+            'PRIORITY_1000_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['priority_1000_incoming_basename'] ?? ''),
+            'PRIORITY_1001_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['priority_1001_executed'])),
+            'PRIORITY_1001_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['priority_1001_callback_count'] ?? 0)),
+            'PRIORITY_1001_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['priority_1001_incoming_basename'] ?? ''),
+            'PHP_INT_MAX_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['php_int_max_executed'])),
+            'PHP_INT_MAX_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['php_int_max_callback_count'] ?? 0)),
+            'PHP_INT_MAX_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['php_int_max_incoming_basename'] ?? ''),
+            'FILTER_CHAIN_REACHED_998' => $this->bool_string(!empty($this->runtime_diag_data['filter_chain_reached_998'])),
+            'FILTER_CHAIN_REACHED_999' => $this->bool_string(!empty($this->runtime_diag_data['filter_chain_reached_999'])),
+            'FILTER_CHAIN_REACHED_1000' => $this->bool_string(!empty($this->runtime_diag_data['filter_chain_reached_1000'])),
+            'FILTER_CHAIN_REACHED_1001' => $this->bool_string(!empty($this->runtime_diag_data['filter_chain_reached_1001'])),
+            'FILTER_CHAIN_REACHED_PHP_INT_MAX' => $this->bool_string(!empty($this->runtime_diag_data['filter_chain_reached_php_int_max'])),
+            'TEMPLATE_AFTER_998_BASENAME' => (string) ($this->runtime_diag_data['template_after_998_basename'] ?? ''),
+            'TEMPLATE_AFTER_999_BASENAME' => (string) ($this->runtime_diag_data['template_after_999_basename'] ?? ''),
+            'TEMPLATE_AT_1000_BASENAME' => (string) ($this->runtime_diag_data['template_at_1000_basename'] ?? ''),
+            'TEMPLATE_AT_1001_BASENAME' => (string) ($this->runtime_diag_data['template_at_1001_basename'] ?? ''),
+            'TEMPLATE_AT_PHP_INT_MAX_BASENAME' => (string) ($this->runtime_diag_data['template_at_php_int_max_basename'] ?? ''),
+            'CONSTRUCTOR_INSTANCE_MARKER' => $constructor_marker,
+            'PRIORITY_998_INSTANCE_MARKER' => $priority_998_marker,
+            'PRIORITY_999_INSTANCE_MARKER' => $priority_999_marker,
+            'PRIORITY_1000_INSTANCE_MARKER' => $priority_1000_marker,
+            'PRIORITY_1001_INSTANCE_MARKER' => $priority_1001_marker,
+            'PHP_INT_MAX_INSTANCE_MARKER' => $php_int_max_marker,
+            'PANEL_INSTANCE_MARKER' => $panel_marker,
+            'ALL_AVAILABLE_INSTANCE_MARKERS_MATCH' => $this->bool_string($markers_match),
+            'PRIORITY_998_REGISTERED_AT_RENDER' => $this->bool_string($load_998_registered),
+            'PRIORITY_998_REGISTERED_PRIORITY' => $load_998_priority_text,
+            'PRIORITY_999_REGISTERED_AT_RENDER' => $this->bool_string($load_999_registered),
+            'PRIORITY_999_REGISTERED_PRIORITY' => $load_999_priority_text,
+            'PRIORITY_1000_REGISTERED_AT_RENDER' => $this->bool_string($load_1000_registered),
+            'PRIORITY_1000_REGISTERED_PRIORITY' => $load_1000_priority_text,
+            'PRIORITY_1001_REGISTERED_AT_RENDER' => $this->bool_string($load_1001_registered),
+            'PRIORITY_1001_REGISTERED_PRIORITY' => $load_1001_priority_text,
+            'PHP_INT_MAX_REGISTERED_AT_RENDER' => $this->bool_string($capture_filter_registered),
+            'PHP_INT_MAX_REGISTERED_PRIORITY' => $capture_filter_priority_text,
+            'LOAD_FILTER_REGISTERED_AT_RENDER' => $this->bool_string($load_999_registered),
+            'CAPTURE_FILTER_REGISTERED_AT_RENDER' => $this->bool_string($capture_filter_registered),
+            'LOAD_FILTER_PRIORITY_AT_RENDER' => $load_999_priority_text,
+            'CAPTURE_FILTER_PRIORITY_AT_RENDER' => $capture_filter_priority_text,
             'LOAD_SINGLE_TEMPLATE_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['load_single_template_executed'])),
             'LOAD_SINGLE_TEMPLATE_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['load_single_template_callback_count'] ?? 0)),
             'LOAD_SINGLE_TEMPLATE_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['load_single_template_incoming_basename'] ?? ''),
@@ -1019,14 +1159,8 @@ final class MathBinder_Core {
             'FINAL_TEMPLATE_IN_PARENT_THEME' => $this->bool_string(!empty($this->runtime_diag_data['final_template_in_parent_theme'])),
             'FINAL_TEMPLATE_IN_MATHBINDER_PLUGIN' => $this->bool_string(!empty($this->runtime_diag_data['final_template_in_mathbinder_plugin'])),
             'CUSTOM_TAXONOMY_TEMPLATE_SELECTED' => $this->bool_string(!empty($this->runtime_diag_data['custom_taxonomy_template_selected'])),
-            'LOAD_FILTER_REGISTERED_AT_RENDER' => $this->bool_string($load_filter_registered),
-            'CAPTURE_FILTER_REGISTERED_AT_RENDER' => $this->bool_string($capture_filter_registered),
-            'LOAD_FILTER_PRIORITY_AT_RENDER' => $load_filter_priority_text,
-            'CAPTURE_FILTER_PRIORITY_AT_RENDER' => $capture_filter_priority_text,
-            'CONSTRUCTOR_INSTANCE_MARKER' => $constructor_marker,
             'LOAD_CALLBACK_INSTANCE_MARKER' => $load_marker,
             'CAPTURE_CALLBACK_INSTANCE_MARKER' => $capture_marker,
-            'PANEL_INSTANCE_MARKER' => $panel_marker,
             'INSTANCE_MARKERS_MATCH' => $this->bool_string($markers_match),
             'PANEL_RENDER_METHOD' => $render_method,
             'ACTIVE_PLUGIN_VERSION' => self::VERSION,
@@ -1073,7 +1207,7 @@ final class MathBinder_Core {
         $this->runtime_diag_panel_rendered = true;
 
         echo '<div style="position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;max-width:980px;max-height:46vh;margin:0 auto;padding:12px;border:2px solid #2b2b2b;background:#fffef5;color:#111;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:auto;font:13px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;">';
-        echo '<div style="font-weight:700;font-size:16px;margin-bottom:8px;">' . esc_html('MathBinder Runtime Diagnostic 27.0.5') . '</div>';
+        echo '<div style="font-weight:700;font-size:16px;margin-bottom:8px;">' . esc_html('MathBinder Runtime Diagnostic 27.0.6') . '</div>';
         foreach ($rows as $label => $value) {
             echo '<div style="display:flex;gap:8px;border-top:1px solid #d9d6c7;padding:4px 0;">';
             echo '<div style="min-width:290px;font-weight:600;">' . esc_html($label) . '</div>';
