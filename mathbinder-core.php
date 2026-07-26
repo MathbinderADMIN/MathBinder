@@ -844,6 +844,22 @@ final class MathBinder_Core {
         return $ctx['request_path_match'] && $ctx['admin_capability_check'] && $ctx['diagnostic_parameter_present'];
     }
 
+    private function safe_query_var_value($value) {
+        if (is_null($value)) {
+            return '';
+        }
+        if (is_scalar($value)) {
+            return (string) $value;
+        }
+        if (is_array($value)) {
+            return '[array]';
+        }
+        if (is_object($value)) {
+            return '[object]';
+        }
+        return '';
+    }
+
     private function path_within_directory($path, $directory) {
         if (!is_string($path) || $path === '' || !is_string($directory) || $directory === '') {
             return false;
@@ -854,6 +870,10 @@ final class MathBinder_Core {
     }
 
     public function capture_runtime_template_diagnostic($template) {
+        if (!$this->runtime_diagnostic_allowed()) {
+            return $template;
+        }
+
         $template_path = is_string($template) ? $template : '';
         $basename = $template_path !== '' ? wp_basename($template_path) : '';
 
@@ -868,6 +888,10 @@ final class MathBinder_Core {
     }
 
     public function capture_runtime_query_diagnostic() {
+        if (!$this->runtime_diagnostic_allowed()) {
+            return;
+        }
+
         $ctx = $this->runtime_diagnostic_context();
 
         $is_main_query = 'n/a';
@@ -895,12 +919,12 @@ final class MathBinder_Core {
         $this->runtime_diag_data['is_search'] = is_search();
         $this->runtime_diag_data['is_main_query'] = $is_main_query;
         $this->runtime_diag_data['self_tax'] = self::TAX;
-        $this->runtime_diag_data['query_var_taxonomy'] = (string) get_query_var('taxonomy');
-        $this->runtime_diag_data['query_var_term'] = (string) get_query_var('term');
-        $this->runtime_diag_data['query_var_self_tax'] = (string) get_query_var(self::TAX);
-        $this->runtime_diag_data['query_var_post_type'] = (string) get_query_var('post_type');
-        $this->runtime_diag_data['query_var_name'] = (string) get_query_var('name');
-        $this->runtime_diag_data['query_var_pagename'] = (string) get_query_var('pagename');
+        $this->runtime_diag_data['query_var_taxonomy'] = $this->safe_query_var_value(get_query_var('taxonomy'));
+        $this->runtime_diag_data['query_var_term'] = $this->safe_query_var_value(get_query_var('term'));
+        $this->runtime_diag_data['query_var_self_tax'] = $this->safe_query_var_value(get_query_var(self::TAX));
+        $this->runtime_diag_data['query_var_post_type'] = $this->safe_query_var_value(get_query_var('post_type'));
+        $this->runtime_diag_data['query_var_name'] = $this->safe_query_var_value(get_query_var('name'));
+        $this->runtime_diag_data['query_var_pagename'] = $this->safe_query_var_value(get_query_var('pagename'));
 
         $queried = get_queried_object();
         $this->runtime_diag_data['queried_object_class'] = is_object($queried) ? get_class($queried) : '';
