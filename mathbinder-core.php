@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.0.1
+ * Version: 27.0.2
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -26,7 +26,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.0.1';
+    const VERSION = '27.0.2';
 
     public function __construct() {
         add_action('init', [$this, 'register_content_types']);
@@ -1248,7 +1248,7 @@ final class MathBinder_Core {
                 </div>
             </section>
 
-            <section class="mb-home-section mb-home-binder-section mb-reveal">
+            <section id="binder-sections" class="mb-home-section mb-home-binder-section mb-reveal">
                 <div class="mb-home-section-heading">
                     <div>
                         <span class="mb-home-kicker">Explore the Binder</span>
