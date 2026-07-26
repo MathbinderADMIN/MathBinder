@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.0.4
+ * Version: 27.0.5
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -26,12 +26,17 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.0.4';
+    const VERSION = '27.0.5';
 
     private $runtime_diag_data = [];
     private $runtime_diag_panel_rendered = false;
+    private $runtime_instance_marker = '';
+    private $constructor_instance_marker = '';
 
     public function __construct() {
+        $this->runtime_instance_marker = 'runtime-instance-active';
+        $this->constructor_instance_marker = $this->runtime_instance_marker;
+
         add_action('init', [$this, 'register_content_types']);
         add_action('add_meta_boxes', [$this, 'add_meta_boxes']);
         add_action('save_post_' . self::CPT, [$this, 'save_meta']);
@@ -794,14 +799,43 @@ final class MathBinder_Core {
     }
 
     public function load_single_template($template) {
-        if (is_singular(self::CPT)) return plugin_dir_path(__FILE__) . 'single-mb_binder_page.php';
-        if (is_tax(self::TAX)) {
-            $taxonomy_template = plugin_dir_path(__FILE__) . 'taxonomy-mb_binder_section.php';
-            if (file_exists($taxonomy_template)) {
-                return $taxonomy_template;
+        $incoming_template = $template;
+        $incoming_basename = (is_string($incoming_template) && $incoming_template !== '') ? wp_basename($incoming_template) : '';
+        $is_singular_cpt = is_singular(self::CPT);
+        $is_tax_self_tax = is_tax(self::TAX);
+        $taxonomy_template = plugin_dir_path(__FILE__) . 'taxonomy-mb_binder_section.php';
+        $taxonomy_exists = false;
+
+        $selected_template = $incoming_template;
+        $return_source = 'incoming';
+
+        if ($is_singular_cpt) {
+            $selected_template = plugin_dir_path(__FILE__) . 'single-mb_binder_page.php';
+            $return_source = 'plugin-single';
+        } elseif ($is_tax_self_tax) {
+            $taxonomy_exists = file_exists($taxonomy_template);
+            if ($taxonomy_exists) {
+                $selected_template = $taxonomy_template;
+                $return_source = 'plugin-taxonomy';
             }
         }
-        return $template;
+
+        if ($this->runtime_diagnostic_allowed()) {
+            $load_callback_count = intval($this->runtime_diag_data['load_single_template_callback_count'] ?? 0) + 1;
+            $return_basename = (is_string($selected_template) && $selected_template !== '') ? wp_basename($selected_template) : '';
+
+            $this->runtime_diag_data['load_single_template_executed'] = true;
+            $this->runtime_diag_data['load_single_template_callback_count'] = $load_callback_count;
+            $this->runtime_diag_data['load_single_template_incoming_basename'] = $incoming_basename;
+            $this->runtime_diag_data['load_single_template_is_singular_cpt'] = $is_singular_cpt;
+            $this->runtime_diag_data['load_single_template_is_tax_self_tax'] = $is_tax_self_tax;
+            $this->runtime_diag_data['load_single_template_file_exists'] = $taxonomy_exists;
+            $this->runtime_diag_data['load_single_template_return_basename'] = $return_basename;
+            $this->runtime_diag_data['load_single_template_return_source'] = $return_source;
+            $this->runtime_diag_data['load_callback_instance_marker'] = $this->runtime_instance_marker;
+        }
+
+        return $selected_template;
     }
 
     private function bool_string($value) {
@@ -876,6 +910,13 @@ final class MathBinder_Core {
 
         $template_path = is_string($template) ? $template : '';
         $basename = $template_path !== '' ? wp_basename($template_path) : '';
+        $capture_callback_count = intval($this->runtime_diag_data['runtime_capture_callback_count'] ?? 0) + 1;
+
+        $this->runtime_diag_data['runtime_capture_executed'] = true;
+        $this->runtime_diag_data['runtime_capture_callback_count'] = $capture_callback_count;
+        $this->runtime_diag_data['runtime_capture_incoming_basename'] = $basename;
+        $this->runtime_diag_data['runtime_capture_final_basename'] = $basename;
+        $this->runtime_diag_data['capture_callback_instance_marker'] = $this->runtime_instance_marker;
 
         $this->runtime_diag_data['final_template_captured'] = $template_path !== '';
         $this->runtime_diag_data['final_template_basename'] = $basename;
@@ -938,16 +979,55 @@ final class MathBinder_Core {
     }
 
     private function runtime_diag_rows($render_method) {
+        $load_filter_priority = has_filter('template_include', [$this, 'load_single_template']);
+        $capture_filter_priority = has_filter('template_include', [$this, 'capture_runtime_template_diagnostic']);
+
+        $load_filter_registered = ($load_filter_priority !== false);
+        $capture_filter_registered = ($capture_filter_priority !== false);
+
+        $load_filter_priority_text = $load_filter_registered ? strval(intval($load_filter_priority)) : '';
+        $capture_filter_priority_text = '';
+        if ($capture_filter_registered) {
+            $capture_filter_priority_text = intval($capture_filter_priority) === PHP_INT_MAX ? 'PHP_INT_MAX' : strval(intval($capture_filter_priority));
+        }
+
+        $constructor_marker = $this->constructor_instance_marker;
+        $load_marker = (string) ($this->runtime_diag_data['load_callback_instance_marker'] ?? '');
+        $capture_marker = (string) ($this->runtime_diag_data['capture_callback_instance_marker'] ?? '');
+        $panel_marker = (string) ($this->runtime_diag_data['panel_instance_marker'] ?? '');
+        $markers_match = ($constructor_marker !== '' && $constructor_marker === $load_marker && $constructor_marker === $capture_marker && $constructor_marker === $panel_marker);
+
         return [
             'REQUEST_PATH_MATCH' => $this->bool_string(!empty($this->runtime_diag_data['request_path_match'])),
             'ADMIN_CAPABILITY_CHECK' => $this->bool_string(!empty($this->runtime_diag_data['admin_capability_check'])),
             'DIAGNOSTIC_PARAMETER_PRESENT' => $this->bool_string(!empty($this->runtime_diag_data['diagnostic_parameter_present'])),
+            'LOAD_SINGLE_TEMPLATE_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['load_single_template_executed'])),
+            'LOAD_SINGLE_TEMPLATE_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['load_single_template_callback_count'] ?? 0)),
+            'LOAD_SINGLE_TEMPLATE_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['load_single_template_incoming_basename'] ?? ''),
+            'LOAD_SINGLE_TEMPLATE_IS_SINGULAR_CPT' => $this->bool_string(!empty($this->runtime_diag_data['load_single_template_is_singular_cpt'])),
+            'LOAD_SINGLE_TEMPLATE_IS_TAX_SELF_TAX' => $this->bool_string(!empty($this->runtime_diag_data['load_single_template_is_tax_self_tax'])),
+            'LOAD_SINGLE_TEMPLATE_FILE_EXISTS' => $this->bool_string(!empty($this->runtime_diag_data['load_single_template_file_exists'])),
+            'LOAD_SINGLE_TEMPLATE_RETURN_BASENAME' => (string) ($this->runtime_diag_data['load_single_template_return_basename'] ?? ''),
+            'LOAD_SINGLE_TEMPLATE_RETURN_SOURCE' => (string) ($this->runtime_diag_data['load_single_template_return_source'] ?? ''),
+            'RUNTIME_CAPTURE_EXECUTED' => $this->bool_string(!empty($this->runtime_diag_data['runtime_capture_executed'])),
+            'RUNTIME_CAPTURE_CALLBACK_COUNT' => strval(intval($this->runtime_diag_data['runtime_capture_callback_count'] ?? 0)),
+            'RUNTIME_CAPTURE_INCOMING_BASENAME' => (string) ($this->runtime_diag_data['runtime_capture_incoming_basename'] ?? ''),
+            'RUNTIME_CAPTURE_FINAL_BASENAME' => (string) ($this->runtime_diag_data['runtime_capture_final_basename'] ?? ''),
             'FINAL_TEMPLATE_CAPTURED' => $this->bool_string(!empty($this->runtime_diag_data['final_template_captured'])),
             'FINAL_TEMPLATE_BASENAME' => (string) ($this->runtime_diag_data['final_template_basename'] ?? ''),
             'FINAL_TEMPLATE_IN_CHILD_THEME' => $this->bool_string(!empty($this->runtime_diag_data['final_template_in_child_theme'])),
             'FINAL_TEMPLATE_IN_PARENT_THEME' => $this->bool_string(!empty($this->runtime_diag_data['final_template_in_parent_theme'])),
             'FINAL_TEMPLATE_IN_MATHBINDER_PLUGIN' => $this->bool_string(!empty($this->runtime_diag_data['final_template_in_mathbinder_plugin'])),
             'CUSTOM_TAXONOMY_TEMPLATE_SELECTED' => $this->bool_string(!empty($this->runtime_diag_data['custom_taxonomy_template_selected'])),
+            'LOAD_FILTER_REGISTERED_AT_RENDER' => $this->bool_string($load_filter_registered),
+            'CAPTURE_FILTER_REGISTERED_AT_RENDER' => $this->bool_string($capture_filter_registered),
+            'LOAD_FILTER_PRIORITY_AT_RENDER' => $load_filter_priority_text,
+            'CAPTURE_FILTER_PRIORITY_AT_RENDER' => $capture_filter_priority_text,
+            'CONSTRUCTOR_INSTANCE_MARKER' => $constructor_marker,
+            'LOAD_CALLBACK_INSTANCE_MARKER' => $load_marker,
+            'CAPTURE_CALLBACK_INSTANCE_MARKER' => $capture_marker,
+            'PANEL_INSTANCE_MARKER' => $panel_marker,
+            'INSTANCE_MARKERS_MATCH' => $this->bool_string($markers_match),
             'PANEL_RENDER_METHOD' => $render_method,
             'ACTIVE_PLUGIN_VERSION' => self::VERSION,
             'REQUEST_PATH' => (string) ($this->runtime_diag_data['request_path'] ?? ''),
@@ -988,11 +1068,12 @@ final class MathBinder_Core {
         if ($this->runtime_diag_panel_rendered || !$this->runtime_diagnostic_allowed()) {
             return;
         }
+        $this->runtime_diag_data['panel_instance_marker'] = $this->runtime_instance_marker;
         $rows = $this->runtime_diag_rows($render_method);
         $this->runtime_diag_panel_rendered = true;
 
         echo '<div style="position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;max-width:980px;max-height:46vh;margin:0 auto;padding:12px;border:2px solid #2b2b2b;background:#fffef5;color:#111;box-shadow:0 8px 24px rgba(0,0,0,.25);overflow:auto;font:13px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;">';
-        echo '<div style="font-weight:700;font-size:16px;margin-bottom:8px;">' . esc_html('MathBinder Runtime Diagnostic 27.0.4') . '</div>';
+        echo '<div style="font-weight:700;font-size:16px;margin-bottom:8px;">' . esc_html('MathBinder Runtime Diagnostic 27.0.5') . '</div>';
         foreach ($rows as $label => $value) {
             echo '<div style="display:flex;gap:8px;border-top:1px solid #d9d6c7;padding:4px 0;">';
             echo '<div style="min-width:290px;font-weight:600;">' . esc_html($label) . '</div>';
