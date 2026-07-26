@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.0.0
+ * Version: 27.0.1
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -26,7 +26,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.0.0';
+    const VERSION = '27.0.1';
 
     public function __construct() {
         add_action('init', [$this, 'register_content_types']);
@@ -754,15 +754,15 @@ final class MathBinder_Core {
 
     public function enqueue_frontend_assets() {
         if (is_singular(self::CPT) || is_post_type_archive(self::CPT) || is_tax(self::TAX) || is_page()) {
-            wp_enqueue_style('mathbinder-core', plugin_dir_url(__FILE__) . 'assets/mathbinder.css', [], self::VERSION);
-            wp_enqueue_script('mathbinder-front', plugin_dir_url(__FILE__) . 'assets/mathbinder-front.js', [], self::VERSION, true);
+            wp_enqueue_style('mathbinder-core', plugin_dir_url(__FILE__) . 'mathbinder.css', [], self::VERSION);
+            wp_enqueue_script('mathbinder-front', plugin_dir_url(__FILE__) . 'mathbinder-front.js', [], self::VERSION, true);
             wp_localize_script('mathbinder-front', 'MathBinderSearch', [
                 'ajaxUrl' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('mb_topic_search_nonce')
             ]);
         }
         wp_localize_script('mathbinder-front', 'mathbinderFooterData', [
-            'logo' => plugin_dir_url(__FILE__) . 'assets/mathbinder-logo.svg',
+            'logo' => plugin_dir_url(__FILE__) . 'Assests/Logos/mathbinder-logo.svg',
             'home' => home_url('/'),
             'binderTopics' => home_url('/binder-topics/'),
             'parents' => home_url('/parents/'),
@@ -781,8 +781,8 @@ final class MathBinder_Core {
         if (!$screen) return;
         if ($screen->post_type === self::CPT || (isset($_GET['page']) && $_GET['page'] === 'mb-quick-add')) {
             wp_enqueue_media();
-            wp_enqueue_style('mathbinder-admin', plugin_dir_url(__FILE__) . 'assets/mathbinder-admin.css', [], self::VERSION);
-            wp_enqueue_script('mathbinder-admin', plugin_dir_url(__FILE__) . 'assets/mathbinder-admin.js', ['jquery'], self::VERSION, true);
+            wp_enqueue_style('mathbinder-admin', plugin_dir_url(__FILE__) . 'mathbinder-admin.css', [], self::VERSION);
+            wp_enqueue_script('mathbinder-admin', plugin_dir_url(__FILE__) . 'mathbinder-admin.js', ['jquery'], self::VERSION, true);
         }
     }
 
@@ -1217,7 +1217,7 @@ final class MathBinder_Core {
             <section class="mb-v8-hero">
                 <div class="mb-v8-copy mb-reveal">
                     <div class="mb-v8-logo">
-                        <img src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'assets/mathbinder-logo.svg'); ?>" alt="MathBinder">
+                        <img src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'Assests/Logos/mathbinder-logo.svg'); ?>" alt="MathBinder">
                     </div>
 
                     <h1><span>Find It.</span><span>Learn It.</span><span>Master It.</span></h1>
@@ -1244,7 +1244,7 @@ final class MathBinder_Core {
                 </div>
 
                 <div class="mb-v8-art mb-reveal" aria-label="MathBinder digital binder illustration">
-                    <img class="mb-v8-scene" src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'assets/mathbinder-binder-scene-v94.png'); ?>" alt="Teal MathBinder with section tabs and an open Place Value Binder Page">
+                    <img class="mb-v8-scene" src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'Assests/mathbinder-binder-scene-v94.png'); ?>" alt="Teal MathBinder with section tabs and an open Place Value Binder Page">
                 </div>
             </section>
 
@@ -1352,7 +1352,7 @@ final class MathBinder_Core {
             <footer class="mb-home-footer mb-reveal">
                 <div class="mb-home-footer-main">
                     <div class="mb-bottom-brand">
-                        <img src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'assets/mathbinder-logo.svg'); ?>" alt="MathBinder">
+                        <img src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'Assests/Logos/mathbinder-logo.svg'); ?>" alt="MathBinder">
                         <p>Digital Student Binder</p>
                         <span>Find It. Learn It. Master It.</span>
                     </div>
@@ -1406,7 +1406,7 @@ final class MathBinder_Core {
                     <h1>Your learning progress</h1>
                     <p>Resume your last lesson, track completed Binder Pages, save favorites, and celebrate each milestone.</p>
                 </div>
-                <img src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'assets/mathbinder-logo.svg'); ?>" alt="MathBinder">
+                <img src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'Assests/Logos/mathbinder-logo.svg'); ?>" alt="MathBinder">
             </header>
 
             <section class="mb-dashboard-metrics" aria-label="Progress summary">
