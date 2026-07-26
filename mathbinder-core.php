@@ -28,7 +28,7 @@ final class MathBinder_Core {
     const QUICK_NONCE = 'mb_quick_add_nonce';
     const VERSION = '27.0.6';
 
-    private static $runtime_diag_state = [];
+    private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
     private $runtime_diag_data = [];
     private $runtime_diag_panel_rendered = false;
@@ -36,9 +36,9 @@ final class MathBinder_Core {
     private $constructor_instance_marker = '';
 
     public function __construct() {
-        $this->runtime_diag_data =& self::$runtime_diag_state;
         $this->runtime_diag_panel_rendered =& self::$runtime_diag_panel_rendered_state;
-        $this->runtime_instance_marker = 'runtime-instance-active';
+        self::$runtime_instance_sequence++;
+        $this->runtime_instance_marker = 'runtime-instance-' . strval(self::$runtime_instance_sequence);
         $this->constructor_instance_marker = $this->runtime_instance_marker;
         $this->runtime_diag_data['constructor_instance_marker'] = $this->runtime_instance_marker;
 
@@ -1086,7 +1086,29 @@ final class MathBinder_Core {
         $load_marker = (string) ($this->runtime_diag_data['load_callback_instance_marker'] ?? '');
         $capture_marker = (string) ($this->runtime_diag_data['capture_callback_instance_marker'] ?? '');
         $panel_marker = (string) ($this->runtime_diag_data['panel_instance_marker'] ?? '');
-        $markers_match = ($constructor_marker !== '' && $constructor_marker === $priority_998_marker && $constructor_marker === $priority_999_marker && $constructor_marker === $priority_1000_marker && $constructor_marker === $priority_1001_marker && $constructor_marker === $php_int_max_marker && $constructor_marker === $panel_marker);
+
+        $callback_markers = [
+            $priority_998_marker,
+            $priority_999_marker,
+            $priority_1000_marker,
+            $priority_1001_marker,
+            $php_int_max_marker,
+        ];
+        $available_callback_markers = array_values(array_filter($callback_markers, function($marker) {
+            return $marker !== '';
+        }));
+        $markers_match = false;
+        if ($constructor_marker !== '' && $panel_marker !== '' && !empty($available_callback_markers)) {
+            $markers_match = ($constructor_marker === $panel_marker);
+            if ($markers_match) {
+                foreach ($available_callback_markers as $available_marker) {
+                    if ($available_marker !== $constructor_marker) {
+                        $markers_match = false;
+                        break;
+                    }
+                }
+            }
+        }
 
         return [
             'REQUEST_PATH_MATCH' => $this->bool_string(!empty($this->runtime_diag_data['request_path_match'])),
@@ -1127,6 +1149,9 @@ final class MathBinder_Core {
             'PHP_INT_MAX_INSTANCE_MARKER' => $php_int_max_marker,
             'PANEL_INSTANCE_MARKER' => $panel_marker,
             'ALL_AVAILABLE_INSTANCE_MARKERS_MATCH' => $this->bool_string($markers_match),
+            'DIAGNOSTIC_STORAGE_SCOPE' => 'per-instance',
+            'PANEL_RENDER_LATCH_SCOPE' => 'class-wide',
+            'CURRENT_INSTANCE_MARKER' => $this->runtime_instance_marker,
             'PRIORITY_998_REGISTERED_AT_RENDER' => $this->bool_string($load_998_registered),
             'PRIORITY_998_REGISTERED_PRIORITY' => $load_998_priority_text,
             'PRIORITY_999_REGISTERED_AT_RENDER' => $this->bool_string($load_999_registered),
