@@ -2340,12 +2340,19 @@ body.home .mb-v8-art .mb-v8-scene{
 
 /* Hide only the old theme footer on Binder Topics */
 body.mb-binder-topics-page #colophon,
+body.mb-binder-section-page #colophon,
 body.mb-binder-topics-page footer.site-footer:not(.mb-home-footer),
+body.mb-binder-section-page footer.site-footer:not(.mb-home-footer),
 body.mb-binder-topics-page .site-footer:not(.mb-home-footer),
+body.mb-binder-section-page .site-footer:not(.mb-home-footer),
 body.mb-binder-topics-page .site-info,
+body.mb-binder-section-page .site-info,
 body.mb-binder-topics-page .footer-wrap:not(.mb-home-footer),
+body.mb-binder-section-page .footer-wrap:not(.mb-home-footer),
 body.mb-binder-topics-page .footer-wrapper:not(.mb-home-footer),
-body.mb-binder-topics-page .footer-area:not(.mb-home-footer){
+body.mb-binder-section-page .footer-wrapper:not(.mb-home-footer),
+body.mb-binder-topics-page .footer-area:not(.mb-home-footer),
+body.mb-binder-section-page .footer-area:not(.mb-home-footer){
     display:none !important;
 }
 
