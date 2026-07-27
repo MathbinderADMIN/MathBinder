@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.0.9
+ * Version: 27.1.0
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -26,7 +26,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.0.9';
+    const VERSION = '27.1.0';
 
     private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
@@ -54,6 +54,7 @@ final class MathBinder_Core {
         add_filter('template_include', [$this, 'trace_template_filter_1001'], 1001);
         add_filter('template_include', [$this, 'capture_runtime_template_diagnostic'], PHP_INT_MAX);
         add_shortcode('mathbinder_topics', [$this, 'topics_shortcode']);
+        add_shortcode('mathbinder_section', [$this, 'section_shortcode']);
         add_shortcode('mathbinder_home', [$this, 'homepage_shortcode']);
         add_shortcode('mathbinder_progress', [$this, 'progress_shortcode']);
         add_shortcode('mathbinder_collection', [$this, 'collection_shortcode']);
@@ -73,7 +74,7 @@ final class MathBinder_Core {
         add_action('wp', [$this, 'capture_pagelayer_timing_wp_priority_999'], 999);
         add_action('wp', [$this, 'capture_pagelayer_timing_wp_php_int_max'], PHP_INT_MAX);
         add_action('wp', [$this, 'capture_runtime_query_diagnostic'], PHP_INT_MAX);
-        add_action('template_redirect', [$this, 'apply_pagelayer_taxonomy_compatibility'], 1);
+        add_action('template_redirect', [$this, 'redirect_legacy_section_archive'], 1);
         add_action('template_redirect', [$this, 'capture_pagelayer_timing_template_redirect_priority_10'], 10);
         add_action('template_redirect', [$this, 'capture_pagelayer_timing_template_redirect_priority_999'], 999);
         add_action('template_redirect', [$this, 'capture_pagelayer_timing_template_redirect_php_int_max'], PHP_INT_MAX);
@@ -833,12 +834,6 @@ final class MathBinder_Core {
         if ($is_singular_cpt) {
             $selected_template = plugin_dir_path(__FILE__) . 'single-mb_binder_page.php';
             $return_source = 'plugin-single';
-        } elseif ($is_tax_self_tax) {
-            $taxonomy_exists = file_exists($taxonomy_template);
-            if ($taxonomy_exists) {
-                $selected_template = $taxonomy_template;
-                $return_source = 'plugin-taxonomy';
-            }
         }
 
         if ($diag_allowed) {
@@ -2172,7 +2167,7 @@ final class MathBinder_Core {
                             $number = get_term_meta($term->term_id, 'mb_number', true);
                             $count = intval($term->count);
                             ?>
-                            <a class="mb-section-card mb-section-card-<?php echo intval($number ?: 0); ?>" href="<?php echo esc_url(get_term_link($term)); ?>">
+                            <a class="mb-section-card mb-section-card-<?php echo intval($number ?: 0); ?>" href="<?php echo esc_url($this->section_page_url($term)); ?>">
                                 <span class="mb-section-number"><?php echo esc_html(str_pad($number ?: 0, 2, '0', STR_PAD_LEFT)); ?></span>
                                 <h3><?php echo esc_html($term->name); ?></h3>
                                 <p><?php echo $count ? esc_html($count . ' published Binder Page' . ($count === 1 ? '' : 's')) : 'Binder Pages coming soon'; ?></p>
@@ -2549,6 +2544,160 @@ final class MathBinder_Core {
         return ob_get_clean();
     }
 
+    private function section_page_url($term) {
+        if (!$term || is_wp_error($term) || empty($term->slug)) {
+            return home_url('/binder-topics/');
+        }
+
+        $page = get_page_by_path('binder-topics/' . $term->slug, OBJECT, 'page');
+        if ($page) {
+            return get_permalink($page);
+        }
+
+        return home_url('/binder-topics/');
+    }
+
+    public function section_shortcode($atts = []) {
+        $atts = shortcode_atts(['slug' => ''], $atts, 'mathbinder_section');
+        $slug = sanitize_title($atts['slug']);
+
+        if ($slug === '') {
+            $page_id = get_queried_object_id();
+            $slug = sanitize_title((string) get_post_meta($page_id, '_mb_section_slug', true));
+        }
+
+        $term = $slug ? get_term_by('slug', $slug, self::TAX) : false;
+        if (!$term || is_wp_error($term)) {
+            return '<div class="mb-empty-section"><h2>Binder Section unavailable.</h2><p>Please return to Binder Topics and choose a section.</p></div>';
+        }
+
+        $topic_map = MathBinder_Lesson_Catalog::get_section_topic_map();
+        $planned = isset($topic_map[$term->slug]) ? $topic_map[$term->slug] : [
+            'description' => '',
+            'topics' => []
+        ];
+        $planned_topics = [];
+
+        foreach (($planned['topics'] ?? []) as $topic) {
+            $title = is_array($topic) ? ($topic['title'] ?? '') : $topic;
+            $title = trim((string) $title);
+            if ($title !== '') {
+                $planned_topics[] = $title;
+            }
+        }
+
+        if (!$planned_topics) {
+            foreach (['primary_topics', 'nested_topics'] as $group) {
+                foreach (($planned[$group] ?? []) as $topic) {
+                    $title = is_array($topic) ? ($topic['title'] ?? '') : $topic;
+                    $title = trim((string) $title);
+                    if ($title !== '') {
+                        $planned_topics[] = $title;
+                    }
+                }
+            }
+        }
+
+        $published_pages = get_posts([
+            'post_type' => self::CPT,
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            'tax_query' => [[
+                'taxonomy' => self::TAX,
+                'field' => 'term_id',
+                'terms' => $term->term_id
+            ]],
+            'orderby' => ['menu_order' => 'ASC', 'title' => 'ASC']
+        ]);
+
+        $published_by_title = [];
+        foreach ($published_pages as $page) {
+            $published_by_title[strtolower(trim($page->post_title))] = $page;
+        }
+
+        ob_start();
+        ?>
+        <main class="mb-page-wrap mb-section-archive mb-section-page">
+            <nav class="mb-breadcrumbs" aria-label="Breadcrumb">
+                <a href="<?php echo esc_url(home_url('/')); ?>">Home</a><span>›</span>
+                <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Binder Topics</a><span>›</span>
+                <span aria-current="page"><?php echo esc_html($term->name); ?></span>
+            </nav>
+
+            <header class="mb-chapter-header">
+                <span class="mb-chapter-label">Binder Section</span>
+                <h1><?php echo esc_html($term->name); ?></h1>
+                <p><?php echo esc_html(!empty($planned['description'])
+                    ? $planned['description']
+                    : 'Open a Binder Page to find instruction, videos, practice, downloads, parent help, and a mastery check.'); ?></p>
+            </header>
+
+            <section class="mb-section-progress" aria-label="Section progress">
+                <div>
+                    <span>Published Binder Pages</span>
+                    <strong><?php echo esc_html(count($published_pages)); ?></strong>
+                </div>
+                <div>
+                    <span>Planned Topics</span>
+                    <strong><?php echo esc_html(count($planned_topics)); ?></strong>
+                </div>
+                <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Back to Binder Topics</a>
+            </section>
+
+            <div class="mb-chapter-page-grid">
+                <?php if ($planned_topics): ?>
+                    <?php foreach ($planned_topics as $index => $topic):
+                        $page = $published_by_title[strtolower(trim($topic))] ?? null;
+                        $is_published = $page && $page->post_status === 'publish';
+                    ?>
+                        <?php if ($is_published): ?>
+                            <a class="mb-chapter-page-card is-published" href="<?php echo esc_url(get_permalink($page)); ?>">
+                                <span class="mb-page-number"><?php echo esc_html(str_pad($index + 1, 2, '0', STR_PAD_LEFT)); ?></span>
+                                <div>
+                                    <span class="mb-topic-status">Available Now</span>
+                                    <h2><?php echo esc_html($topic); ?></h2>
+                                    <?php $summary = get_post_meta($page->ID, '_mb_subtitle', true); ?>
+                                    <?php if ($summary): ?><p><?php echo esc_html($summary); ?></p><?php endif; ?>
+                                    <div class="mb-topic-features">
+                                        <span>Teach It</span><span>Watch It</span><span>Practice It</span><span>Master It</span>
+                                    </div>
+                                </div>
+                                <span class="mb-card-arrow">Open →</span>
+                            </a>
+                        <?php else: ?>
+                            <article class="mb-chapter-page-card is-coming">
+                                <span class="mb-page-number"><?php echo esc_html(str_pad($index + 1, 2, '0', STR_PAD_LEFT)); ?></span>
+                                <div>
+                                    <span class="mb-topic-status">Coming Soon</span>
+                                    <h2><?php echo esc_html($topic); ?></h2>
+                                    <p>This Binder Page is part of the planned section sequence.</p>
+                                </div>
+                            </article>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                <?php elseif ($published_pages): ?>
+                    <?php foreach ($published_pages as $index => $page): ?>
+                        <a class="mb-chapter-page-card is-published" href="<?php echo esc_url(get_permalink($page)); ?>">
+                            <span class="mb-page-number"><?php echo esc_html(str_pad($index + 1, 2, '0', STR_PAD_LEFT)); ?></span>
+                            <div>
+                                <span class="mb-topic-status">Available Now</span>
+                                <h2><?php echo esc_html($page->post_title); ?></h2>
+                            </div>
+                            <span class="mb-card-arrow">Open →</span>
+                        </a>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="mb-empty-section">
+                        <h2>Binder Pages are coming soon.</h2>
+                        <p>This section is ready for content.</p>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </main>
+        <?php
+        return ob_get_clean();
+    }
+
     public function topics_shortcode() {
         $topic_map = MathBinder_Lesson_Catalog::get_section_topic_map();
         $terms = get_terms([
@@ -2649,7 +2798,7 @@ final class MathBinder_Core {
                                 <span><?php echo esc_html(count($section_map['nested_topics'])); ?> nested subsections</span>
                             </div>
 
-                            <a class="mb-notebook-open" href="<?php echo esc_url(get_term_link($term)); ?>">
+                            <a class="mb-notebook-open" href="<?php echo esc_url($this->section_page_url($term)); ?>">
                                 Open Section →
                             </a>
                         </div>
@@ -2739,6 +2888,67 @@ final class MathBinder_Core {
                 update_term_meta($term_id, 'mb_number', $number);
             }
         }
+    }
+
+    private function ensure_section_pages() {
+        $parent = get_page_by_path('binder-topics', OBJECT, 'page');
+        if (!$parent) {
+            return;
+        }
+
+        $terms = get_terms([
+            'taxonomy' => self::TAX,
+            'hide_empty' => false,
+            'orderby' => 'meta_value_num',
+            'meta_key' => 'mb_number'
+        ]);
+        if (is_wp_error($terms)) {
+            return;
+        }
+
+        foreach ($terms as $term) {
+            $path = 'binder-topics/' . $term->slug;
+            $page = get_page_by_path($path, OBJECT, 'page');
+            $content = '[mathbinder_section slug="' . $term->slug . '"]';
+            $page_data = [
+                'post_type' => 'page',
+                'post_status' => 'publish',
+                'post_title' => $term->name,
+                'post_name' => $term->slug,
+                'post_parent' => $parent->ID,
+                'post_content' => $content,
+                'menu_order' => intval(get_term_meta($term->term_id, 'mb_number', true))
+            ];
+
+            if ($page) {
+                if (get_post_meta($page->ID, '_mb_managed_section_page', true) === '1') {
+                    $page_data['ID'] = $page->ID;
+                    wp_update_post($page_data);
+                    update_post_meta($page->ID, '_mb_section_slug', $term->slug);
+                }
+                continue;
+            }
+
+            $page_id = wp_insert_post($page_data);
+            if ($page_id && !is_wp_error($page_id)) {
+                update_post_meta($page_id, '_mb_managed_section_page', '1');
+                update_post_meta($page_id, '_mb_section_slug', $term->slug);
+            }
+        }
+    }
+
+    public function redirect_legacy_section_archive() {
+        if (!is_tax(self::TAX)) {
+            return;
+        }
+
+        $term = get_queried_object();
+        if (!$term || is_wp_error($term) || empty($term->slug)) {
+            return;
+        }
+
+        wp_safe_redirect($this->section_page_url($term), 301);
+        exit;
     }
 
     private function topic_preset($title) {
@@ -2898,6 +3108,9 @@ final class MathBinder_Core {
         if (is_page('binder-topics')) {
             $classes[] = 'mb-binder-topics-page';
         }
+        if (is_page() && get_post_meta(get_queried_object_id(), '_mb_managed_section_page', true) === '1') {
+            $classes[] = 'mb-binder-section-page';
+        }
         if (is_page('my-mathbinder')) {
             $classes[] = 'mb-progress-dashboard-page';
         }
@@ -2933,6 +3146,7 @@ final class MathBinder_Core {
             ]);
         }
 
+        $this->ensure_section_pages();
 
         $progress_page = get_page_by_path('my-mathbinder', OBJECT, 'page');
         if ($progress_page) {
@@ -3257,6 +3471,8 @@ final class MathBinder_Core {
                 'post_content' => '[mathbinder_topics]'
             ]);
         }
+
+        $this->ensure_section_pages();
 
         update_option('mathbinder_core_version', self::VERSION);
         set_transient('mb_activation_notice_v3', 1, 60);
