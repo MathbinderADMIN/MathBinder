@@ -47,7 +47,7 @@ Common misconceptions and corrections: Students may divide x by y instead of y b
         'Can k be a fraction or decimal? Yes. The constant may be any positive or negative value allowed by the context, including a fraction or decimal.',
         'Why are units important? Units explain what the constant represents and help determine the correct order of division.'
     ),
-    'watch_it' => 'A verified Constant of Proportionality video will be added before publication.',
+    'watch_it' => 'Constant of Proportionality | https://www.youtube.com/watch?v=iY7fAbzmVIo',
     'practice_it' => array(
         'A table contains the pairs (2, 14), (5, 35), and (8, 56). Find k and write the equation. Answer: 14 divided by 2 equals 7, so k = 7 and y = 7x.',
         'Find the constant of proportionality in y = 9x. Answer: k = 9.',

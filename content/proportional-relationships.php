@@ -42,7 +42,7 @@ Common misconceptions and corrections: Students may assume that every straight-l
         'Can a straight-line graph be nonproportional? Yes. A straight line that does not pass through the origin is linear but not proportional.',
         'Is the constant of proportionality the same as the unit rate? Yes. It describes how much y changes for each increase of one unit in x.'
     ),
-    'watch_it' => 'A verified Proportional Relationships video will be added before publication.',
+    'watch_it' => 'Proportional Relationships | https://www.youtube.com/watch?v=TWUK7uMgEXE',
     'practice_it' => array(
         'The pairs (1, 5), (2, 10), (3, 15), and (4, 20) appear in a table. Is the relationship proportional? Answer: Yes. Each y-value divided by its corresponding x-value equals 5.',
         'Find the constant of proportionality for y = 7x. Answer: The constant of proportionality is 7.',

@@ -24,7 +24,7 @@ return array(
         'Why are units important? Units identify the quantities being compared and give meaning to the rate.',
         'How can unit rates help compare purchases? Calculate the cost per item, ounce, pound, or other single unit for each choice and compare the results.'
     ),
-    'watch_it' => 'A verified Rates and Unit Rates video will be added before publication.',
+    'watch_it' => 'Rates and Unit Rates | https://www.youtube.com/watch?v=jC1K7fM91sE',
     'practice_it' => array(
         'A car travels 180 miles in 3 hours. Find the unit rate. Answer: 60 miles per hour.',
         'Four notebooks cost $14. Find the cost per notebook. Answer: $3.50 per notebook.',

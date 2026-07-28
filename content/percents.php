@@ -65,7 +65,7 @@ Common misconceptions and corrections: Convert the percent to a decimal before m
         'What is the denominator in a percent-change problem? Use the original or starting value.',
         'Can equal percent increases and decreases cancel? Usually not, because each percent may be based on a different whole.'
     ),
-    'watch_it' => 'A verified Percents video will be added before publication.',
+    'watch_it' => 'Understanding Percents | https://www.youtube.com/watch?v=IkACdHCLn8Q',
     'practice_it' => array(
         'Convert 72% to a decimal and a simplified fraction. Answer: 72% = 0.72 = 72/100 = 18/25.',
         'Find 35% of 240. Answer: 0.35 × 240 = 84.',
