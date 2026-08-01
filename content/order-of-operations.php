@@ -22,7 +22,7 @@ return array(
         'What should I do when an expression contains more than one set of grouping symbols? Begin with the innermost grouping symbols and work outward.',
         'Why should I rewrite the expression after every step? Rewriting helps you focus on one operation at a time while preserving the parts that have not yet been evaluated.'
     ),
-    'watch_it' => 'A verified Order of Operations video will be added before publication.',
+    'watch_it' => 'Order of Operations: A Step-by-Step Guide | Math with Mr. J | https://www.youtube.com/watch?v=x41BCrYh8Kc',
     'practice_it' => array(
         'Evaluate: 6 + 4 x 3. Answer: 18.',
         'Evaluate: (6 + 4) x 3. Answer: 30.',

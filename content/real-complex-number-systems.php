@@ -24,7 +24,8 @@ return array(
         'What does i represent? The imaginary unit i is defined by the equation i squared equals -1.',
         'Are real numbers also complex numbers? Yes. Any real number a can be written as a + 0i.'
     ),
-    'watch_it' => 'A verified Real & Complex Number Systems video will be added before publication.',
+    'watch_it' => 'Introduction to Rational and Irrational Numbers | Math with Mr. J | https://www.youtube.com/watch?v=Th9mT4TxvOI
+Introduction to Complex Numbers | Khan Academy | https://www.youtube.com/watch?v=SP-YJe7Vldo',
     'practice_it' => array(
         'Classify 12 using every applicable number set. Answer: Natural, whole, integer, rational, real, and complex.',
         'Classify -7 using every applicable number set. Answer: Integer, rational, real, and complex.',

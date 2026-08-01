@@ -22,7 +22,9 @@ return array(
         'Do zeros at the end of a decimal change its value? No. For example, 0.5, 0.50, and 0.500 represent the same quantity.',
         'Why must decimal points be lined up? Lining up decimal points keeps ones, tenths, hundredths, and other place values in the correct columns.'
     ),
-    'watch_it' => 'A verified Fractions & Decimals video will be added before publication.',
+    'watch_it' => 'Converting Between Fractions and Decimals | Math with Mr. J | https://www.youtube.com/watch?v=SiQbegnH1NA
+Adding, Subtracting, Multiplying, and Dividing Fractions | Math with Mr. J | https://www.youtube.com/watch?v=-Um7bov8ixc
+Adding, Subtracting, Multiplying, and Dividing Decimals | Math with Mr. J | https://www.youtube.com/watch?v=4LoiWzqvFG4',
     'practice_it' => array(
         'Find an equivalent fraction for 3/4 with a denominator of 12. Answer: 9/12.',
         'Compare 5/6 and 3/4. Answer: 5/6 is greater than 3/4.',

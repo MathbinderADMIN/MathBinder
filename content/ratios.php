@@ -24,7 +24,7 @@ return array(
         'What is a part-to-whole ratio? It compares one part of a group with the total number in the group.',
         'How are equivalent ratios created? Multiply or divide both quantities by the same nonzero number.'
     ),
-    'watch_it' => 'A verified Ratios video will be added before publication.',
+    'watch_it' => "An Intro to Ratios | https://www.youtube.com/watch?v=GnIJQkzYWWs\nRatios: All About Ratios | https://www.youtube.com/watch?v=7AnQUy207Ms\nSimplifying Ratios Explained | https://www.youtube.com/watch?v=SJyNCvU6EUA\nEquivalent Ratios Explained | https://www.youtube.com/watch?v=f2kvrjB8AXE\nRatios: Part to Whole Ratios | https://www.youtube.com/watch?v=G3BO6rrKhzo\nRatio Tables: Finding Missing Values | https://www.youtube.com/watch?v=_uiHgNAU1gE",
     'practice_it' => array(
         'A basket contains 6 red apples and 9 green apples. Write the ratio of red apples to green apples in three forms. Answer: 6 to 9, 6:9, and 6/9.',
         'A class has 8 seventh-grade students and 12 eighth-grade students. Write the ratio of eighth-grade students to seventh-grade students. Answer: 12:8, or 3:2 in simplest form.',
@@ -43,6 +43,9 @@ return array(
         'Create equivalent ratios by multiplying or dividing both quantities by the same nonzero number.',
         'Always label or explain the quantities represented by a ratio.'
     ),
+    'ixl' => "Ratios Lesson | https://www.ixl.com/math/lessons/ratios\nIdentify Equivalent Ratios | https://www.ixl.com/math/grade-6/identify-equivalent-ratios\nRatio Tables | https://www.ixl.com/math/grade-6/ratio-tables\nRatio Tables II | https://www.ixl.com/math/grade-6/ratio-tables-ii\nRatios and Rates: Word Problems | https://www.ixl.com/math/grade-6/ratios-and-rates-word-problems",
+    'khan' => "Ratios: Sixth-Grade Course | https://www.khanacademy.org/math/cc-sixth-grade-math/cc-6th-ratios-prop-topic\nEquivalent Ratios | https://www.khanacademy.org/math/cc-sixth-grade-math/cc-6th-ratios-prop-topic/cc-6th-equivalent-ratios/e/equivalent-ratios\nRatio Tables | https://www.khanacademy.org/math/cc-sixth-grade-math/cc-6th-ratios-prop-topic/cc-6th-equivalent-ratios/e/solving-ratio-problems-with-tables\nEquivalent Ratio Word Problems | https://www.khanacademy.org/math/cc-sixth-grade-math/cc-6th-ratios-prop-topic/cc-6th-equivalent-ratios/e/ratio_word_problems\nRelate Double Number Lines and Ratio Tables | https://www.khanacademy.org/math/cc-sixth-grade-math/cc-6th-ratios-prop-topic/visualize-ratios/e/relate-double-numbers-lines-and-ratio-tables",
+    'delta' => "Intro to Ratios (Level 1) | https://www.deltamath.com/app/teacher/solve/1950774\nSimplifying Ratios | https://www.deltamath.com/app/teacher/solve/1845374\nEquivalent Ratios | https://www.deltamath.com/app/teacher/solve/3036745\nProportional Reasoning with Ratio Table (Decimals) | https://www.deltamath.com/app/teacher/solve/3238767",
     'real_life_math' => 'Ratios are used in recipes, maps, scale models, classroom comparisons, sports statistics, mixtures, construction, photography, and financial planning. They help people describe and reproduce relationships between quantities.',
     'did_you_know' => 'Musicians use ratios to describe relationships between sound frequencies. Simple frequency ratios help produce musical intervals that listeners recognize as harmonious.'
 );
