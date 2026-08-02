@@ -3463,11 +3463,17 @@ body.mb-binder-section-page .footer-area:not(.mb-home-footer){
 @media(max-width:782px){
     .mb-sticky-section-nav{
         top:0 !important;
+        transition:transform .25s ease, opacity .25s ease !important;
+        will-change:transform;
         overflow-x:auto !important;
         flex-wrap:nowrap !important;
         scrollbar-width:thin;
     }
-
+    .mb-sticky-section-nav.is-scroll-hidden{
+        transform:translateY(calc(-100% - 12px)) !important;
+        opacity:0 !important;
+        pointer-events:none !important;
+    }
     .mb-sticky-section-nav a{
         flex:0 0 auto !important;
         white-space:nowrap !important;

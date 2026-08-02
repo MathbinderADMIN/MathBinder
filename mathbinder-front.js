@@ -534,6 +534,36 @@ document.addEventListener('DOMContentLoaded', function(){
             observer.observe(item.section);
         });
     }
+        // Hide while scrolling down on mobile; reveal when scrolling up.
+        let lastScrollY = window.scrollY;
+        let ticking = false;
+
+        function updateMobileNav(){
+            const currentScrollY = window.scrollY;
+
+            if (window.innerWidth <= 782) {
+                const scrollingDown = currentScrollY > lastScrollY;
+
+                nav.classList.toggle(
+                    'is-scroll-hidden',
+                    scrollingDown && currentScrollY > nav.offsetHeight
+                );
+            } else {
+                nav.classList.remove('is-scroll-hidden');
+            }
+
+            lastScrollY = Math.max(currentScrollY, 0);
+            ticking = false;
+        }
+
+        window.addEventListener('scroll', function(){
+            if (!ticking) {
+                window.requestAnimationFrame(updateMobileNav);
+                ticking = true;
+            }
+        }, { passive: true });
+
+        window.addEventListener('resize', updateMobileNav);
 });
 
 
