@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 27.1.0
+ * Version: 30.27.0
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -20,13 +20,40 @@ require_once __DIR__ . '/provisioning/evaluation-engine.php';
 require_once __DIR__ . '/provisioning/adapters/wordpress-reader.php';
 require_once __DIR__ . '/provisioning/adapters/wordpress-writer.php';
 require_once __DIR__ . '/provisioning/lesson-provisioner.php';
+require_once __DIR__ . '/foundation/class-migrations.php';
+require_once __DIR__ . '/foundation/class-capabilities.php';
+require_once __DIR__ . '/foundation/class-audit-log.php';
+require_once __DIR__ . '/foundation/class-rest-controller.php';
+require_once __DIR__ . '/foundation/class-student-dashboard.php';
+require_once __DIR__ . '/foundation/class-teacher-dashboard.php';
+require_once __DIR__ . '/identity/class-identity-service.php';
+require_once __DIR__ . '/identity/class-verification-service.php';
+require_once __DIR__ . '/identity/class-account-workspace.php';
+require_once __DIR__ . '/identity/class-family-account.php';
+require_once __DIR__ . '/identity/class-frontend-auth.php';
+require_once __DIR__ . '/identity/class-identity-admin.php';
+require_once __DIR__ . '/organization/class-organization-migrations.php';
+require_once __DIR__ . '/organization/class-organization-service.php';
+require_once __DIR__ . '/organization/class-organization-admin.php';
+require_once __DIR__ . '/integrations/stripe/class-stripe-settings.php';
+require_once __DIR__ . '/integrations/stripe/class-family-checkout.php';
+require_once __DIR__ . '/integrations/canvas/class-canvas-adapter.php';
+require_once __DIR__ . '/integrations/canvas/class-null-canvas-adapter.php';
+require_once __DIR__ . '/integrations/canvas/class-canvas-crypto.php';
+require_once __DIR__ . '/integrations/canvas/class-canvas-repository.php';
+require_once __DIR__ . '/integrations/canvas/class-lti-canvas-adapter.php';
+require_once __DIR__ . '/integrations/canvas/class-canvas-settings.php';
+require_once __DIR__ . '/integrations/canvas/class-canvas-protocol.php';
+require_once __DIR__ . '/integrations/canvas/class-canvas-transport.php';
+require_once __DIR__ . '/integrations/canvas/class-canvas-integration.php';
+require_once __DIR__ . '/foundation/bootstrap.php';
 
 final class MathBinder_Core {
     const CPT = 'mb_binder_page';
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '27.1.0';
+    const VERSION = '30.27.0';
 
     private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
@@ -58,6 +85,17 @@ final class MathBinder_Core {
         add_shortcode('mathbinder_home', [$this, 'homepage_shortcode']);
         add_shortcode('mathbinder_progress', [$this, 'progress_shortcode']);
         add_shortcode('mathbinder_collection', [$this, 'collection_shortcode']);
+        add_shortcode('mathbinder_evidence_folder', [$this, 'evidence_folder_shortcode']);
+        add_shortcode('mathbinder_parents', [$this, 'parents_shortcode']);
+        add_shortcode('mathbinder_teachers', [$this, 'teachers_shortcode']);
+        add_shortcode('mathbinder_about', [$this, 'about_shortcode']);
+        add_shortcode('mathbinder_contact', [$this, 'contact_shortcode']);
+        add_shortcode('mathbinder_getting_started', [$this, 'getting_started_shortcode']);
+        add_shortcode('mathbinder_privacy', [$this, 'privacy_shortcode']);
+        add_shortcode('mathbinder_terms', [$this, 'terms_shortcode']);
+        add_shortcode('mathbinder_premium_access', [$this, 'premium_access_shortcode']);
+        add_shortcode('mathbinder_assignment_helper', [$this, 'assignment_helper_shortcode']);
+        add_shortcode('mathbinder_interactive_notebook', [$this, 'interactive_notebook_shortcode']);
         add_filter('manage_' . self::CPT . '_posts_columns', [$this, 'columns']);
         add_action('manage_' . self::CPT . '_posts_custom_column', [$this, 'column_content'], 10, 2);
         add_action('admin_menu', [$this, 'add_quick_add_page']);
@@ -66,9 +104,15 @@ final class MathBinder_Core {
         add_action('admin_post_mb_gold_certify', [$this, 'handle_gold_certify']);
         add_action('admin_post_mb_clone_lesson', [$this, 'handle_clone_lesson']);
         add_action('admin_post_mb_update_lesson_status', [$this, 'handle_update_lesson_status']);
+        add_action('admin_post_mb_bulk_generate_lessons', [$this, 'handle_bulk_generate_lessons']);
+        add_action('admin_post_mb_contact_submit', [$this, 'handle_contact_submit']);
+        add_action('admin_post_nopriv_mb_contact_submit', [$this, 'handle_contact_submit']);
+        add_action('wp_ajax_mb_assignment_feedback', [$this, 'ajax_assignment_feedback']);
+        add_action('wp_ajax_nopriv_mb_assignment_feedback', [$this, 'ajax_assignment_feedback']);
         add_action('admin_notices', [$this, 'admin_notice']);
         add_action('admin_head', [$this, 'hide_lesson_builder_notices']);
         add_action('admin_init', [$this, 'maybe_upgrade']);
+        add_action('admin_init', [$this, 'maybe_repair_fractions_challenge'], 20);
         add_action('wp', [$this, 'capture_pagelayer_timing_wp_priority_1'], 1);
         add_action('wp', [$this, 'capture_pagelayer_timing_wp_priority_10'], 10);
         add_action('wp', [$this, 'capture_pagelayer_timing_wp_priority_999'], 999);
@@ -79,6 +123,7 @@ final class MathBinder_Core {
         add_action('template_redirect', [$this, 'capture_pagelayer_timing_template_redirect_priority_999'], 999);
         add_action('template_redirect', [$this, 'capture_pagelayer_timing_template_redirect_php_int_max'], PHP_INT_MAX);
         add_action('wp_footer', [$this, 'render_runtime_diagnostic_panel_footer'], PHP_INT_MAX);
+        add_action('wp_footer', [$this, 'render_official_site_footer'], 20);
         add_action('shutdown', [$this, 'render_runtime_diagnostic_panel_shutdown'], PHP_INT_MAX);
         add_filter('body_class', [$this, 'body_classes']);
         add_action('wp_ajax_mb_topic_search', [$this, 'ajax_topic_search']);
@@ -141,6 +186,37 @@ final class MathBinder_Core {
             'mb-lesson-builder',
             [$this, 'render_lesson_builder_page']
         );
+        add_submenu_page(
+            'edit.php?post_type=' . self::CPT,
+            'Bulk Lesson Generator',
+            'Bulk Lesson Generator',
+            'edit_posts',
+            'mb-bulk-lesson-generator',
+            [$this, 'render_bulk_lesson_generator_page']
+        );
+        add_submenu_page(
+            'edit.php?post_type=' . self::CPT,
+            'AI Assignment Tutor',
+            'AI Tutor Setup',
+            'manage_options',
+            'mb-ai-helper',
+            [$this, 'render_ai_helper_setup_page']
+        );
+    }
+
+    public function render_ai_helper_setup_page() {
+        if (!current_user_can('manage_options')) return;
+        $configured = defined('MATHBINDER_OPENAI_API_KEY') && trim((string) MATHBINDER_OPENAI_API_KEY) !== '';
+        ?>
+        <div class="wrap">
+            <h1>AI Assignment Tutor</h1>
+            <div class="notice <?php echo $configured ? 'notice-success' : 'notice-warning'; ?> inline">
+                <p><strong><?php echo $configured ? 'Secure AI connection configured.' : 'Secure AI connection not configured.'; ?></strong></p>
+            </div>
+            <p>The API key is never stored in a page, browser script, shortcode, or student upload. Add it as the server-side constant <code>MATHBINDER_OPENAI_API_KEY</code> in <code>wp-config.php</code>.</p>
+            <p>The helper accepts one PDF, JPG, PNG, or WEBP up to 8 MB, requests hint-first feedback, and does not save the uploaded file in the WordPress Media Library.</p>
+        </div>
+        <?php
     }
 
     public function render_quick_add_page() {
@@ -314,16 +390,10 @@ final class MathBinder_Core {
         $value = trim((string)get_post_meta($post_id, '_mb_' . $key, true));
         if ($value === '') return false;
 
-        $placeholder_starts = [
-            'Add a ', 'Explain ', 'What important ', 'Describe a ',
-            'Question |', 'Term —', 'Example title |', 'Ask...',
-            'Students will...', 'Misconception |', 'Formative checkpoint',
-            'Standard code'
-        ];
-
-        foreach ($placeholder_starts as $start) {
-            if (strpos($value, $start) === 0) return false;
-        }
+        // Reject the builder's actual instructional placeholders, not valid
+        // lesson content that happens to begin with words such as "Explain".
+        $placeholders = $this->lesson_builder_placeholders();
+        if (isset($placeholders[$key]) && $value === trim((string) $placeholders[$key])) return false;
         if (preg_match('#https://\s*$#', $value)) return false;
         return true;
     }
@@ -387,7 +457,7 @@ final class MathBinder_Core {
             'orderby'=>'modified',
             'order'=>'DESC'
         ]);
-        $recent = array_slice($all_lessons, 0, 15);
+        $recent = $all_lessons;
         $required = $this->lesson_builder_required_fields();
         $groups = $this->lesson_builder_groups();
         $dashboard = $this->curriculum_dashboard_data($all_lessons);
@@ -425,6 +495,9 @@ final class MathBinder_Core {
             <?php endif; ?>
             <?php if(isset($_GET['mb_certification'])): ?>
                 <div class="notice notice-success mb-builder-own-notice"><p><strong>Gold Certification completed.</strong></p></div>
+            <?php endif; ?>
+            <?php if(isset($_GET['mb_workflow_error'])): ?>
+                <div class="notice notice-error mb-builder-own-notice"><p><strong><?php echo esc_html(sanitize_text_field(wp_unslash($_GET['mb_workflow_error']))); ?></strong></p></div>
             <?php endif; ?>
 
             <section class="mb-production-dashboard">
@@ -501,6 +574,7 @@ final class MathBinder_Core {
 
             <section class="mb-builder-panel">
                 <div class="mb-builder-panel-heading"><span>5</span><div><small>Curriculum Management</small><h2>Production Status &amp; Action Reports</h2></div></div>
+                <p class="description"><strong>Required workflow:</strong> Draft → In Development → Review → Gold Certified → Published. Certification must pass before a lesson can be published.</p>
                 <div class="mb-builder-recent-list">
                     <?php foreach($recent as $lesson):
                         $completion=$this->lesson_completion_data($lesson->ID);
@@ -529,6 +603,7 @@ final class MathBinder_Core {
                             </form>
                             <div class="mb-builder-recent-actions">
                                 <a class="button" href="<?php echo esc_url(get_edit_post_link($lesson->ID)); ?>">Edit</a>
+                                <a class="button" target="_blank" rel="noopener" href="<?php echo esc_url(get_preview_post_link($lesson->ID)); ?>">Preview</a>
                                 <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="mb_gold_certify"><input type="hidden" name="post_id" value="<?php echo intval($lesson->ID); ?>"><?php wp_nonce_field('mb_gold_certify_'.$lesson->ID,'mb_cert_nonce'); ?><button class="button button-primary">Certify</button></form>
                             </div>
                         </article>
@@ -561,10 +636,85 @@ final class MathBinder_Core {
         $id=absint($_POST['post_id']??0);if(!$id||!current_user_can('edit_post',$id))wp_die('Permission denied.');
         check_admin_referer('mb_update_lesson_status_'.$id,'mb_status_nonce');
         $allowed=['draft','development','review','gold-certified','published'];$status=sanitize_key($_POST['lesson_status']??'draft');if(!in_array($status,$allowed,true))$status='draft';
+        $certification=get_post_meta($id,'_mb_gold_certification',true);
+        if(in_array($status,['gold-certified','published'],true)&&$certification!=='gold-ready'){
+            $message=rawurlencode('Run Gold Certification and resolve every required item before advancing this lesson.');
+            wp_safe_redirect(admin_url('edit.php?post_type='.self::CPT.'&page=mb-lesson-builder&mb_workflow_error='.$message));exit;
+        }
         update_post_meta($id,'_mb_lesson_status',$status);
+        update_post_meta($id,'_mb_lesson_status_changed_at',current_time('mysql'));
+        update_post_meta($id,'_mb_lesson_status_changed_by',get_current_user_id());
         if($status==='published')wp_update_post(['ID'=>$id,'post_status'=>'publish']);elseif(get_post_status($id)==='publish')wp_update_post(['ID'=>$id,'post_status'=>'draft']);
         if($status==='gold-certified')update_post_meta($id,'_mb_gold_certification','gold-ready');
         wp_safe_redirect(admin_url('edit.php?post_type='.self::CPT.'&page=mb-lesson-builder&mb_status_updated=1'));exit;
+    }
+
+    public function render_bulk_lesson_generator_page() {
+        if(!current_user_can('edit_posts')) return;
+        $terms=get_terms(['taxonomy'=>self::TAX,'hide_empty'=>false]);
+        $recovery=get_transient('mb_bulk_lesson_recovery_'.get_current_user_id());
+        if(!is_array($recovery))$recovery=[];
+        delete_transient('mb_bulk_lesson_recovery_'.get_current_user_id());
+        $created=isset($_GET['created'])?absint($_GET['created']):0;
+        $skipped=isset($_GET['skipped'])?absint($_GET['skipped']):0;
+        $failed=isset($_GET['failed'])?absint($_GET['failed']):0;
+        ?>
+        <div class="wrap mb-builder-wrap">
+            <h1>Bulk Lesson Generator</h1>
+            <p>Create multiple Binder Pages safely. Enter one unique lesson title per line.</p>
+            <?php if(isset($_GET['mb_bulk_result'])): ?><div class="notice notice-success mb-builder-own-notice"><p><strong><?php echo esc_html($created); ?> created, <?php echo esc_html($skipped); ?> skipped, <?php echo esc_html($failed); ?> failed.</strong></p></div><?php endif; ?>
+            <?php if(!empty($recovery['error'])): ?><div class="notice notice-error mb-builder-own-notice"><p><strong><?php echo esc_html($recovery['error']); ?></strong></p></div><?php endif; ?>
+            <section class="mb-builder-panel">
+                <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="mb-builder-form">
+                    <input type="hidden" name="action" value="mb_bulk_generate_lessons"><?php wp_nonce_field('mb_bulk_generate_lessons','mb_bulk_nonce'); ?>
+                    <p><label><strong>Lesson Titles</strong><br><textarea name="lesson_titles" rows="14" required placeholder="Adding Whole Numbers&#10;Subtracting Whole Numbers&#10;Multiplying Whole Numbers"><?php echo esc_textarea($recovery['lesson_titles']??''); ?></textarea></label></p>
+                    <div class="mb-builder-form-grid">
+                        <p><label><strong>Binder Section</strong><br><select required name="section_id"><option value="">Choose a section</option><?php foreach($terms as $term): ?><option value="<?php echo intval($term->term_id); ?>" <?php selected(absint($recovery['section_id']??0),$term->term_id); ?>><?php echo esc_html($term->name); ?></option><?php endforeach; ?></select></label></p>
+                        <p><label><strong>WordPress Status</strong><br><select name="post_status"><?php foreach(['draft'=>'Draft','pending'=>'Pending Review','publish'=>'Published'] as $key=>$label): ?><option value="<?php echo esc_attr($key); ?>" <?php selected($recovery['post_status']??'draft',$key); ?>><?php echo esc_html($label); ?></option><?php endforeach; ?></select></label></p>
+                    </div>
+                    <p><label><input type="checkbox" name="placeholders" value="1" <?php checked(!isset($recovery['placeholders'])||!empty($recovery['placeholders'])); ?>> Add Gold-template authoring guidance</label></p>
+                    <?php submit_button('Generate Lessons'); ?>
+                </form>
+            </section>
+        </div><?php
+    }
+
+    public function handle_bulk_generate_lessons() {
+        if(!current_user_can('edit_posts'))wp_die('Permission denied.');
+        check_admin_referer('mb_bulk_generate_lessons','mb_bulk_nonce');
+        $raw=wp_unslash($_POST['lesson_titles']??'');
+        $section=absint($_POST['section_id']??0);
+        $post_status=sanitize_key($_POST['post_status']??'draft');
+        $allowed=['draft','pending','publish'];
+        $placeholders=!empty($_POST['placeholders']);
+        $recovery=['lesson_titles'=>$raw,'section_id'=>$section,'post_status'=>$post_status,'placeholders'=>$placeholders];
+        $term=$section?get_term($section,self::TAX):null;
+        if(!$raw||!$term||is_wp_error($term)||!in_array($post_status,$allowed,true)){
+            $recovery['error']='Enter at least one title, choose a valid Binder Section, and choose a valid status.';
+            set_transient('mb_bulk_lesson_recovery_'.get_current_user_id(),$recovery,10*MINUTE_IN_SECONDS);
+            wp_safe_redirect(admin_url('edit.php?post_type='.self::CPT.'&page=mb-bulk-lesson-generator'));exit;
+        }
+        $lines=preg_split('/\r\n|\r|\n/',(string)$raw);
+        $titles=[];$seen=[];
+        foreach($lines as $line){$title=sanitize_text_field(trim($line));if($title==='')continue;$key=function_exists('mb_strtolower')?mb_strtolower($title,'UTF-8'):strtolower($title);if(isset($seen[$key]))continue;$seen[$key]=true;$titles[]=$title;}
+        $existing=get_posts(['post_type'=>self::CPT,'post_status'=>'any','posts_per_page'=>-1,'fields'=>'ids']);
+        $existing_titles=[];foreach($existing as $existing_id){$existing_title=get_the_title($existing_id);$key=function_exists('mb_strtolower')?mb_strtolower($existing_title,'UTF-8'):strtolower($existing_title);$existing_titles[$key]=true;}
+        $created=0;$skipped=0;$failed=0;
+        foreach($titles as $title){
+            $key=function_exists('mb_strtolower')?mb_strtolower($title,'UTF-8'):strtolower($title);
+            if(isset($existing_titles[$key])){$skipped++;continue;}
+            $id=wp_insert_post(['post_type'=>self::CPT,'post_status'=>$post_status,'post_title'=>$title,'post_name'=>sanitize_title($title)],true);
+            if(is_wp_error($id)){$failed++;continue;}
+            $assigned=wp_set_object_terms($id,[$section],self::TAX);
+            if(is_wp_error($assigned)){wp_delete_post($id,true);$failed++;continue;}
+            update_post_meta($id,'_mb_template_version','1.0');
+            update_post_meta($id,'_mb_gold_certification','not-run');
+            update_post_meta($id,'_mb_lesson_status',$post_status==='publish'?'published':($post_status==='pending'?'review':'draft'));
+            update_post_meta($id,'_mb_completion_status','not_started');
+            if($placeholders)foreach($this->lesson_builder_placeholders() as $meta_key=>$value)update_post_meta($id,'_mb_'.$meta_key,$value);
+            $existing_titles[$key]=true;$created++;
+        }
+        wp_safe_redirect(admin_url('edit.php?post_type='.self::CPT.'&page=mb-bulk-lesson-generator&mb_bulk_result=1&created='.$created.'&skipped='.$skipped.'&failed='.$failed));exit;
     }
 
     public function handle_lesson_builder_create() {
@@ -788,22 +938,71 @@ final class MathBinder_Core {
             wp_enqueue_script('mathbinder-front', plugin_dir_url(__FILE__) . 'mathbinder-front.js', [], self::VERSION, true);
             wp_localize_script('mathbinder-front', 'MathBinderSearch', [
                 'ajaxUrl' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('mb_topic_search_nonce')
+                'nonce' => wp_create_nonce('mb_topic_search_nonce'),
+                'assignmentNonce' => wp_create_nonce('mb_assignment_feedback_nonce'),
+                'activityUrl' => rest_url('mathbinder/v1/student/activity'),
+                'serverActivity' => is_user_logged_in() ? get_user_meta(get_current_user_id(), 'mb_student_activity_v1', true) : null,
+                'restNonce' => wp_create_nonce('wp_rest')
             ]);
         }
         wp_localize_script('mathbinder-front', 'mathbinderFooterData', [
             'logo' => plugin_dir_url(__FILE__) . 'Assests/Logos/mathbinder-logo.svg',
             'home' => home_url('/'),
             'binderTopics' => home_url('/binder-topics/'),
-            'parents' => home_url('/parents/'),
-            'teachers' => home_url('/teachers/'),
-            'about' => home_url('/about/'),
-            'contact' => home_url('/contact/'),
+            'parents' => $this->public_page_url('parents'),
+            'teachers' => $this->public_page_url('teachers'),
+            'about' => $this->public_page_url('about'),
+            'contact' => $this->public_page_url('contact'),
             'myBinder' => home_url('/my-mathbinder/'),
             'yourBinder' => home_url('/your-binder/'),
             'year' => date('Y')
         ]);
 
+    }
+
+    /**
+     * Render the MathBinder footer in the page HTML.
+     *
+     * The front-end script still normalizes older theme footers, but the
+     * official footer must not depend on JavaScript in order to appear.
+     */
+    public function render_official_site_footer() {
+        if (is_admin() || wp_doing_ajax()) return;
+        ?>
+        <footer id="mb-official-site-footer" class="mb-official-site-footer" aria-label="MathBinder site footer">
+            <div class="mb-official-footer-main">
+                <div class="mb-official-footer-brand">
+                    <a href="<?php echo esc_url(home_url('/')); ?>">
+                        <img src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'Assests/Logos/mathbinder-logo.svg'); ?>" alt="MathBinder">
+                    </a>
+                    <p>Digital Student Binder</p>
+                    <span>Find It. Learn It. Master It.</span>
+                </div>
+                <div class="mb-official-footer-links">
+                    <h2>Explore</h2>
+                    <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Binder Topics</a>
+                    <a href="<?php echo esc_url($this->public_page_url('parents')); ?>">Parents</a>
+                    <a href="<?php echo esc_url($this->public_page_url('teachers')); ?>">Teachers</a>
+                    <a href="<?php echo esc_url($this->public_page_url('about')); ?>">About</a>
+                    <a href="<?php echo esc_url($this->public_page_url('contact')); ?>">Contact</a>
+                </div>
+                <div class="mb-official-footer-purpose">
+                    <h2>Our Purpose</h2>
+                    <p>Make trustworthy math help easier to find, easier to understand, and easier to use.</p>
+                    <nav class="mb-official-footer-legal" aria-label="Help and legal links">
+                        <a href="<?php echo esc_url($this->public_page_url('getting_started')); ?>">Getting Started</a>
+                        <a href="<?php echo esc_url($this->public_page_url('premium_access')); ?>">Premium Access</a>
+                        <a href="<?php echo esc_url($this->public_page_url('privacy')); ?>">Privacy</a>
+                        <a href="<?php echo esc_url($this->public_page_url('terms')); ?>">Terms</a>
+                    </nav>
+                </div>
+            </div>
+            <div class="mb-official-footer-bottom">
+                <span>&copy; <?php echo esc_html(wp_date('Y')); ?> MathBinder</span>
+                <span>Digital Student Binder</span>
+            </div>
+        </footer>
+        <?php
     }
 
     public function enqueue_admin_assets($hook) {
@@ -1720,6 +1919,25 @@ final class MathBinder_Core {
         return $resources;
     }
 
+    public function youtube_embed_url($url) {
+        $url = html_entity_decode(trim((string) $url), ENT_QUOTES, 'UTF-8');
+        if ($url === '') return '';
+
+        $video_id = '';
+
+        if (preg_match(
+            '~(?:(?:www\.)?youtube(?:-nocookie)?\.com/(?:watch\?(?:[^#\s]*&)?v=|embed/|shorts/)|youtu\.be/)([A-Za-z0-9_-]{11})(?:[?&#/\s]|$)~i',
+            $url,
+            $matches
+        )) {
+            $video_id = $matches[1];
+        }
+
+        if ($video_id === '') return '';
+
+        return 'https://www.youtube-nocookie.com/embed/' . rawurlencode($video_id) . '?rel=0';
+    }
+
     public function render_resource_cards($text, $provider = 'Resource', $note = '') {
         $resources = $this->parse_resources($text);
         if (!$resources) return '';
@@ -1985,7 +2203,13 @@ final class MathBinder_Core {
                 'field' => 'term_id',
                 'terms' => $terms[0]
             ]],
-            'orderby' => ['menu_order' => 'ASC', 'title' => 'ASC']
+            /*
+             * Content packs create lessons in their approved teaching sequence.
+             * Many of those lessons intentionally share the default menu_order,
+             * so ID is the stable tie-breaker. Alphabetical title order makes
+             * the progress counter and lesson navigation pedagogically wrong.
+             */
+            'orderby' => ['menu_order' => 'ASC', 'ID' => 'ASC']
         ]);
     }
 
@@ -2057,43 +2281,25 @@ final class MathBinder_Core {
     }
 
     public function get_adjacent_topic($post_id, $direction = 'next') {
-        $terms = wp_get_post_terms($post_id, self::TAX, ['fields' => 'ids']);
-        if (!$terms) return null;
-        $current_order = intval(get_post_field('menu_order', $post_id));
-        $args = [
-            'post_type' => self::CPT,
-            'post_status' => 'publish',
-            'posts_per_page' => 1,
-            'tax_query' => [[
-                'taxonomy' => self::TAX,
-                'field' => 'term_id',
-                'terms' => $terms[0]
-            ]],
-            'post__not_in' => [$post_id],
-            'orderby' => ['menu_order' => 'ASC', 'title' => 'ASC']
-        ];
+        $pages = $this->get_section_pages($post_id, 'publish');
+        if (!$pages) return null;
 
-        if ($direction === 'previous') {
-            $args['meta_query'] = [];
-            $args['orderby'] = ['menu_order' => 'DESC', 'title' => 'DESC'];
-            $args['date_query'] = [];
-            $args['posts_per_page'] = -1;
-            $posts = get_posts($args);
-            foreach ($posts as $candidate) {
-                if (intval($candidate->menu_order) < $current_order) return $candidate;
-            }
-            return null;
+        foreach ($pages as $index => $page) {
+            if (intval($page->ID) !== intval($post_id)) continue;
+
+            $target_index = $direction === 'previous' ? $index - 1 : $index + 1;
+            return isset($pages[$target_index]) ? $pages[$target_index] : null;
         }
 
-        $posts = get_posts($args);
-        foreach ($posts as $candidate) {
-            if (intval($candidate->menu_order) > $current_order) return $candidate;
-        }
         return null;
     }
 
 
     public function homepage_shortcode() {
+        if (!is_user_logged_in()) {
+            return $this->public_homepage();
+        }
+
         $sections = get_terms([
             'taxonomy' => self::TAX,
             'hide_empty' => false,
@@ -2237,7 +2443,7 @@ final class MathBinder_Core {
                         <li>Common misconceptions</li>
                         <li>Conversation starters</li>
                     </ul>
-                    <a href="<?php echo esc_url(home_url('/parents/')); ?>">Learn more →</a>
+                    <a href="<?php echo esc_url($this->public_page_url('parents')); ?>">Learn more →</a>
                 </article>
 
                 <article class="mb-audience-card mb-audience-teachers">
@@ -2249,7 +2455,7 @@ final class MathBinder_Core {
                         <li>Curated practice resources</li>
                         <li>Consistent topic organization</li>
                     </ul>
-                    <a href="<?php echo esc_url(home_url('/teachers/')); ?>">Learn more →</a>
+                    <a href="<?php echo esc_url($this->public_page_url('teachers')); ?>">Learn more →</a>
                 </article>
             </section>
 
@@ -2263,9 +2469,9 @@ final class MathBinder_Core {
                     <div class="mb-bottom-links">
                         <h2>Explore</h2>
                         <a href="<?php echo esc_url($binder_topics ? get_permalink($binder_topics) : home_url('/binder-topics/')); ?>">Binder Topics</a>
-                        <a href="<?php echo esc_url(home_url('/parents/')); ?>">Parents</a>
-                        <a href="<?php echo esc_url(home_url('/teachers/')); ?>">Teachers</a>
-                        <a href="<?php echo esc_url(home_url('/contact/')); ?>">Contact</a>
+                        <a href="<?php echo esc_url($this->public_page_url('parents')); ?>">Parents</a>
+                        <a href="<?php echo esc_url($this->public_page_url('teachers')); ?>">Teachers</a>
+                        <a href="<?php echo esc_url($this->public_page_url('contact')); ?>">Contact</a>
                     </div>
                     <div class="mb-bottom-mission">
                         <h2>Our Purpose</h2>
@@ -2278,6 +2484,68 @@ final class MathBinder_Core {
                 </div>
             </footer>
         </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    private function public_homepage() {
+        $login_url = class_exists('MathBinder_Frontend_Auth')
+            ? MathBinder_Frontend_Auth::login_url()
+            : home_url('/login/');
+        $signup_url = class_exists('MathBinder_Family_Checkout')
+            ? MathBinder_Family_Checkout::signup_url()
+            : home_url('/sign-up/');
+
+        ob_start();
+        ?>
+        <main class="mb-public-home">
+            <section class="mb-public-home-hero">
+                <div class="mb-public-home-copy">
+                    <img class="mb-public-home-logo" src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'Assests/Logos/mathbinder-logo.svg'); ?>" alt="MathBinder">
+                    <p class="mb-public-home-kicker">Digital Student Binder</p>
+                    <h1>Math help that stays organized.</h1>
+                    <p class="mb-public-home-lead">MathBinder brings clear lessons, helpful videos, practice resources, notes, and progress tools together in one easy-to-use learning space.</p>
+                    <div class="mb-public-home-actions">
+                        <a class="mb-public-home-signup" href="<?php echo esc_url($signup_url); ?>">Start Your 14-Day Free Trial</a>
+                        <a class="mb-public-home-login" href="<?php echo esc_url($login_url); ?>">Log In</a>
+                    </div>
+                    <p class="mb-public-home-price">Family Premium is $14.99 per month for the first child and $4.99 per month for each additional child.</p>
+                </div>
+                <div class="mb-public-home-demo">
+                    <video class="mb-public-home-video" controls playsinline preload="metadata" aria-label="See how MathBinder works">
+                        <source src="<?php echo esc_url(content_url('/uploads/2026/08/mathbinder-promo.mp4')); ?>" type="video/mp4">
+                        Your browser does not support the video player.
+                    </video>
+                </div>
+            </section>
+
+            <section class="mb-public-home-benefits" aria-labelledby="mb-benefits-title">
+                <div class="mb-public-home-heading">
+                    <p class="mb-public-home-kicker">Find It. Learn It. Master It.</p>
+                    <h2 id="mb-benefits-title">Everything students need to keep moving forward</h2>
+                </div>
+                <div class="mb-public-home-benefit-grid">
+                    <article><span aria-hidden="true">1</span><h3>Find the right topic</h3><p>Students can quickly reach the math help they need without sorting through unrelated material.</p></article>
+                    <article><span aria-hidden="true">2</span><h3>Learn in more than one way</h3><p>Explanations, examples, videos, and practice work together to make difficult ideas clearer.</p></article>
+                    <article><span aria-hidden="true">3</span><h3>Build lasting mastery</h3><p>Notes and progress tools help students remember what they learned and see what comes next.</p></article>
+                </div>
+            </section>
+
+            <section class="mb-public-home-audiences">
+                <div><p class="mb-public-home-kicker">For Families</p><h2>Support math learning with confidence.</h2><p>Parents receive one organized place to manage their children and support learning without having to search across multiple websites.</p></div>
+                <div class="mb-public-home-checklist">
+                    <p>Clear, student-friendly instruction</p>
+                    <p>Organized videos and practice resources</p>
+                    <p>Digital notes and progress support</p>
+                    <p>One parent account for multiple children</p>
+                </div>
+            </section>
+
+            <section class="mb-public-home-cta">
+                <div><p class="mb-public-home-kicker">Ready to begin?</p><h2>Give your child a better place to learn math.</h2><p>Try Family Premium free for 14 days. Cancel anytime.</p></div>
+                <a href="<?php echo esc_url($signup_url); ?>">Sign Up</a>
+            </section>
+        </main>
         <?php
         return ob_get_clean();
     }
@@ -2432,112 +2700,115 @@ final class MathBinder_Core {
 
         ob_start();
         ?>
-        <div class="mb-collection-dashboard">
-            <header class="mb-collection-hero">
+        <div class="mb-collection-dashboard mb-my-mathbinder" data-my-mathbinder>
+            <header class="mb-my-mathbinder-hero">
                 <div>
-                    <span class="mb-collection-kicker">Your Growing MathBinder</span>
-                    <h1>Build a binder you can keep</h1>
-                    <p>Collect lesson notes, practice pages, challenge activities, and support resources as you learn.</p>
+                    <span class="mb-collection-kicker">Find it. Learn it. Master it.</span>
+                    <h1>My MathBinder</h1>
+                    <p>Everything you add from a lesson is organized here so you can reopen it, keep working, print it, or remove it.</p>
                     <div class="mb-collection-hero-actions">
+                        <?php if (is_user_logged_in() && MathBinder_Capabilities::can_view_student_dashboard()) : ?>
+                            <a class="mb-student-dashboard-link" href="<?php echo esc_url(home_url('/student-dashboard/')); ?>">Student Dashboard</a>
+                        <?php endif; ?>
                         <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Browse Binder Topics</a>
-                        <a href="<?php echo esc_url(home_url('/my-mathbinder/')); ?>">View My Progress</a>
                     </div>
                 </div>
-                <div class="mb-collection-visual" aria-hidden="true">
-                    <span class="mb-binder-spine"></span>
-                    <div class="mb-binder-cover">
-                        <strong>MathBinder</strong>
-                        <small>Find It. Learn It. Master It.</small>
-                    </div>
-                    <div class="mb-binder-tabs">
-                        <span>Notes</span><span>Practice</span><span>Challenge</span><span>Support</span>
-                    </div>
+                <div class="mb-my-mathbinder-brand">
+                    <img src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'Assests/Logos/mathbinder-logo.svg'); ?>" alt="MathBinder">
+                    <div><strong data-mb-collected-total>0</strong><span>saved items</span></div>
                 </div>
             </header>
 
-            <section class="mb-collection-summary">
-                <article>
-                    <span>Collected Resources</span>
-                    <strong data-mb-collected-total>0</strong>
-                    <small>Added to your binder</small>
-                </article>
-                <article>
-                    <span>Lessons Represented</span>
-                    <strong data-mb-collected-lessons>0</strong>
-                    <small>With at least one resource</small>
-                </article>
-                <article>
-                    <span>Completed Lessons</span>
-                    <strong data-mb-collection-completed>0</strong>
-                    <small>Across all sections</small>
-                </article>
-                <article>
-                    <span>Binder Progress</span>
-                    <strong data-mb-collection-percent>0%</strong>
-                    <small>Resources collected</small>
-                </article>
+            <section class="mb-my-binder-controls" id="my-math-notes" aria-label="Search and filter saved items">
+                <label><span>Search my saved items</span><input type="search" data-my-binder-search placeholder="Search by title or math section"></label>
+                <div class="mb-my-binder-filters" role="group" aria-label="Filter saved items">
+                    <button type="button" class="is-active" data-binder-filter="all">All Saved Items</button>
+                    <button type="button" data-binder-filter="lesson">Lessons</button>
+                    <button type="button" data-binder-filter="notebook">Interactive Notebook</button>
+                    <button type="button" data-binder-filter="journal">Math Journal</button>
+                    <button type="button" data-binder-filter="notes">My Math Notes</button>
+                    <button type="button" data-binder-filter="reference">Reference Pages</button>
+                    <button type="button" data-binder-filter="practice">Practice</button>
+                </div>
             </section>
 
-            <section class="mb-collection-progress-card">
+            <section class="mb-my-binder-recent">
+                <div class="mb-dashboard-heading">
+                    <div><span class="mb-collection-kicker">Continue working</span><h2>Recently Added</h2></div>
+                </div>
+                <div class="mb-my-binder-card-grid" data-my-binder-recent></div>
+            </section>
+
+            <section class="mb-my-binder-sections">
+                <div class="mb-dashboard-heading">
+                    <div><span class="mb-collection-kicker">My saved collection</span><h2>Browse by math section</h2></div>
+                    <p>Saved privately in this browser.</p>
+                </div>
+                <div data-my-binder-sections></div>
+                <div class="mb-my-binder-empty" data-my-binder-empty>
+                    <div aria-hidden="true">＋</div>
+                    <h2>Your binder is empty</h2>
+                    <p>Open a lesson and select <strong>Add to My Binder</strong> on a lesson, notebook page, or Math Journal entry you want to keep.</p>
+                    <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Browse Binder Topics</a>
+                </div>
+            </section>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    public function evidence_folder_shortcode() {
+        if (!is_user_logged_in()) {
+            return '<section class="mb-dashboard-gate"><h1>Your Evidence Folder is waiting</h1><p>Log in to view the lessons you have completed.</p><a class="mb-button mb-button-primary" href="' . esc_url(MathBinder_Frontend_Auth::login_url(get_permalink())) . '">Log In</a></section>';
+        }
+
+        $teacher_reviews = get_user_meta(get_current_user_id(), 'mb_teacher_evidence_reviews_v1', true);
+        if (!is_array($teacher_reviews)) $teacher_reviews = [];
+        $terms = get_terms([
+            'taxonomy' => self::TAX,
+            'hide_empty' => false,
+            'orderby' => 'meta_value_num',
+            'meta_key' => 'mb_number',
+        ]);
+
+        ob_start();
+        ?>
+        <div class="mb-collection-dashboard mb-evidence-folder" data-mb-evidence-folder>
+            <header class="mb-my-mathbinder-hero">
                 <div>
-                    <span class="mb-collection-kicker">Binder Progress</span>
-                    <h2>Your collection is growing</h2>
-                    <p>Every downloaded or opened resource is recorded on this device.</p>
+                    <span class="mb-collection-kicker">Your completed learning</span>
+                    <h1>Evidence Folder</h1>
+                    <p>Lessons you mark complete are collected here as evidence of your learning.</p>
+                    <div class="mb-collection-hero-actions">
+                        <a href="<?php echo esc_url(home_url('/student-dashboard/')); ?>">Student Dashboard</a>
+                        <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Explore the Binder</a>
+                    </div>
                 </div>
-                <div class="mb-collection-progress-track">
-                    <span data-mb-collection-fill style="width:0%"></span>
+                <div class="mb-my-mathbinder-brand">
+                    <img src="<?php echo esc_url(plugin_dir_url(__FILE__) . 'Assests/Logos/mathbinder-logo.svg'); ?>" alt="MathBinder">
+                    <div><strong data-mb-evidence-total>0</strong><span>completed lessons</span></div>
                 </div>
-            </section>
-
-            <section class="mb-collection-sections">
-                <?php foreach ($terms as $term):
-                    $pages = get_posts([
-                        'post_type' => self::CPT,
-                        'post_status' => 'publish',
-                        'posts_per_page' => -1,
-                        'orderby' => ['menu_order' => 'ASC', 'title' => 'ASC'],
-                        'tax_query' => [[
-                            'taxonomy' => self::TAX,
-                            'field' => 'term_id',
-                            'terms' => $term->term_id
-                        ]]
-                    ]);
-                ?>
-                    <article class="mb-collection-section"
-                             data-collection-section="<?php echo esc_attr($term->slug); ?>">
-                        <div class="mb-collection-section-heading">
-                            <div>
-                                <span>Binder Section</span>
-                                <h2><?php echo esc_html($term->name); ?></h2>
-                            </div>
-                            <strong data-section-resource-count>0 resources</strong>
-                        </div>
-
-                        <?php if ($pages): ?>
-                            <div class="mb-collection-lesson-grid">
-                                <?php foreach ($pages as $page): ?>
-                                    <article class="mb-collection-lesson"
-                                             data-collection-post="<?php echo esc_attr($page->ID); ?>"
-                                             data-section-slug="<?php echo esc_attr($term->slug); ?>"
-                                             data-title="<?php echo esc_attr($page->post_title); ?>">
-                                        <div class="mb-collection-lesson-heading">
-                                            <a href="<?php echo esc_url(get_permalink($page)); ?>"><?php echo esc_html($page->post_title); ?></a>
-                                            <span data-lesson-resource-count>0 / 4</span>
-                                        </div>
-                                        <div class="mb-collection-resource-row">
-                                            <span data-resource-type="notes">📄 Notes</span>
-                                            <span data-resource-type="practice">✏️ Practice</span>
-                                            <span data-resource-type="challenge">🧩 Challenge</span>
-                                            <span data-resource-type="support">👨‍🏫 Support</span>
-                                        </div>
-                                    </article>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php else: ?>
-                            <p class="mb-collection-empty">Binder Pages are coming soon for this section.</p>
-                        <?php endif; ?>
-                    </article>
-                <?php endforeach; ?>
+            </header>
+            <section class="mb-my-binder-sections">
+                <div class="mb-dashboard-heading"><div><span class="mb-collection-kicker">Evidence of learning</span><h2>Completed Lessons</h2></div></div>
+                <div class="mb-my-binder-card-grid" data-mb-evidence-items>
+                <?php if (!is_wp_error($terms)) : foreach ($terms as $term) :
+                    $pages = get_posts(['post_type' => self::CPT, 'post_status' => 'publish', 'numberposts' => -1, 'tax_query' => [['taxonomy' => self::TAX, 'field' => 'term_id', 'terms' => $term->term_id]]]);
+                    foreach ($pages as $page) : $teacher_review = $teacher_reviews[(string)$page->ID] ?? []; ?>
+                        <article class="mb-my-binder-card" data-evidence-lesson data-section-slug="<?php echo esc_attr($term->slug); ?>" data-post-id="<?php echo esc_attr($page->ID); ?>" hidden>
+                            <span class="mb-my-binder-type">Completed Lesson</span>
+                            <h3><?php echo esc_html($page->post_title); ?></h3>
+                            <p><?php echo esc_html($term->name); ?></p>
+                            <?php if ($teacher_review): ?><div class="mb-student-teacher-review"><strong><?php echo esc_html($teacher_review['decision']==='mastered' ? 'Teacher marked this lesson mastered' : ($teacher_review['decision']==='revision_requested' ? 'Teacher requested a revision' : 'Teacher feedback')); ?></strong><span><?php echo esc_html($teacher_review['teacher_name'] ?? 'Your teacher'); ?></span><?php if (!empty($teacher_review['feedback'])): ?><p><?php echo esc_html($teacher_review['feedback']); ?></p><?php endif; ?></div><?php endif; ?>
+                            <div class="mb-my-binder-actions"><a href="<?php echo esc_url(get_permalink($page)); ?>">Review Lesson</a></div>
+                        </article>
+                    <?php endforeach; endforeach; endif; ?>
+                </div>
+                <div class="mb-my-binder-empty" data-mb-evidence-empty>
+                    <div aria-hidden="true">✓</div><h2>No completed lessons yet</h2>
+                    <p>When you mark a lesson complete, it will appear here as evidence of your learning.</p>
+                    <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Choose a Math Topic</a>
+                </div>
             </section>
         </div>
         <?php
@@ -2631,18 +2902,6 @@ final class MathBinder_Core {
                     ? $planned['description']
                     : 'Open a Binder Page to find instruction, videos, practice, downloads, parent help, and a mastery check.'); ?></p>
             </header>
-
-            <section class="mb-section-progress" aria-label="Section progress">
-                <div>
-                    <span>Published Binder Pages</span>
-                    <strong><?php echo esc_html(count($published_pages)); ?></strong>
-                </div>
-                <div>
-                    <span>Planned Topics</span>
-                    <strong><?php echo esc_html(count($planned_topics)); ?></strong>
-                </div>
-                <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Back to Binder Topics</a>
-            </section>
 
             <div class="mb-chapter-page-grid">
                 <?php if ($planned_topics): ?>
@@ -2747,6 +3006,22 @@ final class MathBinder_Core {
                             'terms' => $term->term_id
                         ]]
                     ]);
+
+                    /*
+                     * Sections added after the original PDF catalog may have
+                     * published lesson pages without duplicate static catalog
+                     * entries. Use those live pages as the card hierarchy so
+                     * the overview never hides existing lessons or reports a
+                     * misleading zero count.
+                     */
+                    if (empty($section_map['primary_topics']) && !empty($published)) {
+                        $section_map['primary_topics'] = array_map(static function ($post_id) {
+                            return [
+                                'slug' => get_post_field('post_name', $post_id),
+                                'title' => get_the_title($post_id),
+                            ];
+                        }, $published);
+                    }
                 ?>
                     <article class="mb-notebook-page mb-notebook-page-<?php echo esc_attr($number); ?>">
                         <span class="mb-notebook-tab">
@@ -2863,10 +3138,338 @@ final class MathBinder_Core {
 
     public function column_content($column, $post_id) {
         if ($column !== 'mb_completion') return;
-        $keys = ['subtitle', 'essential_question', 'introduction', 'learning_targets', 'vocabulary', 'worked_examples', 'learn_checks', 'did_you_know', 'common_questions', 'videos', 'video_chapters', 'watch_vocabulary', 'pause_prompts', 'video_transcript', 'ixl', 'khan', 'parent_summary', 'parent_conversation', 'parent_mistakes', 'parent_five_minute', 'parent_activity', 'parent_help', 'master_it', 'mastery_questions', 'teacher_notes', 'standards'];
-        $complete = 0;
-        foreach ($keys as $key) if (get_post_meta($post_id, '_mb_' . $key, true)) $complete++;
-        echo esc_html(round(($complete / count($keys)) * 100)) . '%';
+        $completion = $this->lesson_completion_data($post_id);
+        echo '<strong>' . esc_html($completion['percent']) . '%</strong>';
+        echo '<br><small>' . esc_html($completion['complete_count']) . ' / ' . esc_html($completion['total']) . ' complete</small>';
+        if ($completion['missing']) {
+            echo '<details><summary>' . esc_html(count($completion['missing'])) . ' missing items</summary><ul>';
+            foreach ($completion['missing'] as $label) {
+                echo '<li>' . esc_html($label) . '</li>';
+            }
+            echo '</ul></details>';
+        }
+    }
+
+    private function complete_number_system_lessons() {
+        $content_file = __DIR__ . '/content/number-system-completion.php';
+        if (!is_readable($content_file)) return;
+
+        $lessons = require $content_file;
+        if (!is_array($lessons)) return;
+
+        foreach ($lessons as $slug => $fields) {
+            $lesson = get_page_by_path($slug, OBJECT, self::CPT);
+            if (!$lesson || !is_array($fields)) continue;
+
+            foreach ($fields as $key => $value) {
+                if (!array_key_exists($key, $this->lesson_builder_required_fields())) continue;
+                if ($this->lesson_field_is_complete($lesson->ID, $key)) continue;
+                update_post_meta($lesson->ID, '_mb_' . $key, $value);
+            }
+
+            $completion = $this->lesson_completion_data($lesson->ID);
+            update_post_meta($lesson->ID, '_mb_gold_certification_percent', $completion['percent']);
+            update_post_meta($lesson->ID, '_mb_gold_certification_missing', $completion['missing']);
+            if (!$completion['missing']) {
+                update_post_meta($lesson->ID, '_mb_lesson_status', 'gold-certified');
+                update_post_meta($lesson->ID, '_mb_gold_certification', 'gold-ready');
+            }
+        }
+
+        // Repair the one Fractions & Decimals field that could remain
+        // incomplete after the 30.13.0 bulk-content upgrade.
+        $fractions = $this->find_fractions_decimals_lesson();
+        if ($fractions && !$this->lesson_field_is_complete($fractions->ID, 'challenge_practice')) {
+            update_post_meta(
+                $fractions->ID,
+                '_mb_challenge_practice',
+                "Explain why a fraction in simplest form has a terminating decimal only when its denominator has no prime factors other than 2 and 5.\nCreate three different fractions between 0.4 and 0.5 and justify their placement."
+            );
+
+            $completion = $this->lesson_completion_data($fractions->ID);
+            update_post_meta($fractions->ID, '_mb_gold_certification_percent', $completion['percent']);
+            update_post_meta($fractions->ID, '_mb_gold_certification_missing', $completion['missing']);
+            if (!$completion['missing']) {
+                update_post_meta($fractions->ID, '_mb_lesson_status', 'gold-certified');
+                update_post_meta($fractions->ID, '_mb_gold_certification', 'gold-ready');
+            }
+        }
+    }
+
+    private function complete_ratio_lessons() {
+        $content_file = __DIR__ . '/content/ratios-proportional-completion.php';
+        if (!is_readable($content_file)) return;
+        $lessons = require $content_file;
+        if (!is_array($lessons)) return;
+
+        foreach ($lessons as $slug => $fields) {
+            $lesson = get_page_by_path($slug, OBJECT, self::CPT);
+            if (!$lesson || !is_array($fields)) continue;
+            foreach ($fields as $key => $value) {
+                if (!array_key_exists($key, $this->lesson_builder_required_fields())) continue;
+                if ($this->lesson_field_is_complete($lesson->ID, $key)) continue;
+                update_post_meta($lesson->ID, '_mb_' . $key, $value);
+            }
+            $completion = $this->lesson_completion_data($lesson->ID);
+            update_post_meta($lesson->ID, '_mb_gold_certification_percent', $completion['percent']);
+            update_post_meta($lesson->ID, '_mb_gold_certification_missing', $completion['missing']);
+            if (!$completion['missing']) {
+                update_post_meta($lesson->ID, '_mb_lesson_status', 'gold-certified');
+                update_post_meta($lesson->ID, '_mb_gold_certification', 'gold-ready');
+            }
+        }
+    }
+
+    private function complete_algebraic_expression_lessons() {
+        $content_file = __DIR__ . '/content/algebraic-expressions-completion.php';
+        if (!is_readable($content_file)) return;
+        $lessons = require $content_file;
+        if (!is_array($lessons)) return;
+
+        foreach ($lessons as $slug => $fields) {
+            $lesson = get_page_by_path($slug, OBJECT, self::CPT);
+            if (!$lesson || !is_array($fields)) continue;
+            foreach ($fields as $key => $value) {
+                if (!array_key_exists($key, $this->lesson_builder_required_fields())) continue;
+                if ($this->lesson_field_is_complete($lesson->ID, $key)) continue;
+                update_post_meta($lesson->ID, '_mb_' . $key, $value);
+            }
+            $completion = $this->lesson_completion_data($lesson->ID);
+            update_post_meta($lesson->ID, '_mb_gold_certification_percent', $completion['percent']);
+            update_post_meta($lesson->ID, '_mb_gold_certification_missing', $completion['missing']);
+            if (!$completion['missing']) {
+                update_post_meta($lesson->ID, '_mb_lesson_status', 'gold-certified');
+                update_post_meta($lesson->ID, '_mb_gold_certification', 'gold-ready');
+            }
+        }
+    }
+
+    private function find_lesson_by_slug_or_title($slug, $title) {
+        $lesson = get_page_by_path($slug, OBJECT, self::CPT);
+        if ($lesson) return $lesson;
+
+        $candidates = get_posts([
+            'post_type' => self::CPT,
+            'post_status' => ['publish', 'draft', 'pending', 'private', 'future'],
+            'posts_per_page' => -1,
+            'orderby' => 'ID',
+            'order' => 'ASC'
+        ]);
+        foreach ($candidates as $candidate) {
+            if (strcasecmp(trim((string) $candidate->post_title), trim((string) $title)) === 0) return $candidate;
+        }
+        return null;
+    }
+
+    private function complete_solving_graphing_equations_lessons() {
+        $content_file = __DIR__ . '/content/solving-graphing-equations-completion.php';
+        if (!is_readable($content_file)) return;
+        $lessons = require $content_file;
+        if (!is_array($lessons)) return;
+
+        foreach ($lessons as $slug => $fields) {
+            if (!is_array($fields)) continue;
+            $title = isset($fields['title']) ? $fields['title'] : ucwords(str_replace('-', ' ', $slug));
+            $lesson = $this->find_lesson_by_slug_or_title($slug, $title);
+            if (!$lesson) continue;
+            foreach ($fields as $key => $value) {
+                if ($key === 'title') continue;
+                if (!array_key_exists($key, $this->lesson_builder_required_fields())) continue;
+                if ($this->lesson_field_is_complete($lesson->ID, $key)) continue;
+                update_post_meta($lesson->ID, '_mb_' . $key, $value);
+            }
+            $completion = $this->lesson_completion_data($lesson->ID);
+            update_post_meta($lesson->ID, '_mb_gold_certification_percent', $completion['percent']);
+            update_post_meta($lesson->ID, '_mb_gold_certification_missing', $completion['missing']);
+            if (!$completion['missing']) {
+                update_post_meta($lesson->ID, '_mb_lesson_status', 'gold-certified');
+                update_post_meta($lesson->ID, '_mb_gold_certification', 'gold-ready');
+            }
+        }
+    }
+
+    private function completion_content_key_for_geometry_title($title) {
+        $title = strtolower(trim((string) $title));
+        if (preg_match('/right.?triangle.*trig|trigonometr/', $title)) return 'right-triangle-trigonometry';
+        if (strpos($title, 'construct') !== false) return 'geometric-constructions';
+        if (strpos($title, 'congruen') !== false || strpos($title, 'rigid') !== false) return 'congruence-and-rigid-motions';
+        if (strpos($title, 'similar') !== false || strpos($title, 'dilat') !== false) return 'similarity-and-dilations';
+        if (strpos($title, 'pythag') !== false || strpos($title, 'distance formula') !== false) return 'pythagorean-theorem-and-distance-formula';
+        if (strpos($title, 'coordinate') !== false || strpos($title, 'proof') !== false) return 'coordinate-geometry-and-proof';
+        if (strpos($title, 'angle') !== false || strpos($title, 'triangle theorem') !== false || strpos($title, 'triangle relationship') !== false) return 'triangle-angle-relationships';
+        if (strpos($title, 'transform') !== false) return 'transformations';
+        return '';
+    }
+
+    private function apply_completion_fields_to_lesson($lesson, $fields) {
+        if (!$lesson || !is_array($fields)) return;
+        foreach ($fields as $key => $value) {
+            if ($key === 'title') continue;
+            if (!array_key_exists($key, $this->lesson_builder_required_fields())) continue;
+            if ($this->lesson_field_is_complete($lesson->ID, $key)) continue;
+            update_post_meta($lesson->ID, '_mb_' . $key, $value);
+        }
+        $completion = $this->lesson_completion_data($lesson->ID);
+        update_post_meta($lesson->ID, '_mb_gold_certification_percent', $completion['percent']);
+        update_post_meta($lesson->ID, '_mb_gold_certification_missing', $completion['missing']);
+        if (!$completion['missing']) {
+            update_post_meta($lesson->ID, '_mb_lesson_status', 'gold-certified');
+            update_post_meta($lesson->ID, '_mb_gold_certification', 'gold-ready');
+        }
+    }
+
+    private function complete_inequalities_triangles_transformations_lessons() {
+        $content_file = __DIR__ . '/content/inequalities-triangles-transformations-completion.php';
+        if (!is_readable($content_file)) return;
+        $lessons = require $content_file;
+        if (!is_array($lessons)) return;
+
+        $completed_ids = [];
+        foreach ($lessons as $slug => $fields) {
+            if (!is_array($fields)) continue;
+            $title = isset($fields['title']) ? $fields['title'] : ucwords(str_replace('-', ' ', $slug));
+            $lesson = $this->find_lesson_by_slug_or_title($slug, $title);
+            if (!$lesson) continue;
+            $this->apply_completion_fields_to_lesson($lesson, $fields);
+            $completed_ids[(int) $lesson->ID] = true;
+        }
+
+        $section_lessons = get_posts([
+            'post_type' => self::CPT,
+            'post_status' => ['publish', 'draft', 'pending', 'private', 'future'],
+            'posts_per_page' => -1,
+            'tax_query' => [[
+                'taxonomy' => self::TAX,
+                'field' => 'slug',
+                'terms' => ['triangles-transformations'],
+            ]],
+        ]);
+        foreach ($section_lessons as $lesson) {
+            if (isset($completed_ids[(int) $lesson->ID])) continue;
+            $key = $this->completion_content_key_for_geometry_title($lesson->post_title);
+            if ($key === '' || !isset($lessons[$key])) continue;
+            $this->apply_completion_fields_to_lesson($lesson, $lessons[$key]);
+        }
+    }
+
+    private function completion_content_key_for_measurement_title($title) {
+        $title = strtolower(trim((string) $title));
+        if (strpos($title, 'cross-section') !== false || strpos($title, 'solid of revolution') !== false || strpos($title, 'solids of revolution') !== false) return 'cross-sections-and-solids-of-revolution';
+        if (strpos($title, 'composite') !== false) return 'composite-figures';
+        if (strpos($title, 'surface') !== false || strpos($title, 'net') !== false) return 'surface-area';
+        if (preg_match('/pyramid|cone|sphere/', $title)) return 'volume-of-pyramids-cones-and-spheres';
+        if (preg_match('/prism|cylinder/', $title) && strpos($title, 'volume') !== false) return 'volume-of-prisms-and-cylinders';
+        if (strpos($title, 'circle') !== false) return 'circles';
+        if (strpos($title, 'scale') !== false || strpos($title, 'dimension') !== false || strpos($title, 'measurement') !== false) return 'scale-drawings-and-dimensional-measurement';
+        if (strpos($title, 'polygon') !== false) return 'area-of-polygons';
+        if (strpos($title, 'area') !== false || strpos($title, 'perimeter') !== false) return 'area-and-perimeter';
+        return '';
+    }
+
+    private function completion_content_key_for_statistics_title($title) {
+        $title = strtolower(trim((string) $title));
+        if (strpos($title, 'regression') !== false || strpos($title, 'correlation') !== false || strpos($title, 'causation') !== false) return 'regression-correlation-and-causation';
+        if (strpos($title, 'scatter') !== false || strpos($title, 'association') !== false || strpos($title, 'line of fit') !== false) return 'scatter-plots-and-association';
+        if (strpos($title, 'two-way') !== false || strpos($title, 'categorical') !== false || strpos($title, 'relative frequenc') !== false) return 'two-way-tables-and-categorical-data';
+        if (strpos($title, 'compound') !== false || strpos($title, 'independent') !== false || strpos($title, 'dependent') !== false) return 'compound-probability';
+        if (strpos($title, 'simulation') !== false || strpos($title, 'model') !== false) return 'probability-models-and-simulation';
+        if (strpos($title, 'sample') !== false || strpos($title, 'population') !== false || strpos($title, 'bias') !== false) return 'populations-and-samples';
+        if (strpos($title, 'compare') !== false || strpos($title, 'distribution') !== false) return 'comparing-data-distributions';
+        if (strpos($title, 'center') !== false || strpos($title, 'variability') !== false || strpos($title, 'mean') !== false || strpos($title, 'median') !== false) return 'measures-of-center-and-variability';
+        if (strpos($title, 'experimental') !== false || strpos($title, 'theoretical') !== false) return 'theoretical-and-experimental-probability';
+        if (strpos($title, 'probability') !== false) return 'theoretical-and-experimental-probability';
+        if (strpos($title, 'statistic') !== false || strpos($title, 'data') !== false || strpos($title, 'display') !== false) return 'statistical-questions-and-data-displays';
+        return '';
+    }
+
+    private function complete_volume_area_probability_statistics_lessons() {
+        $content_file = __DIR__ . '/content/volume-area-probability-statistics-completion.php';
+        if (!is_readable($content_file)) return;
+        $lessons = require $content_file;
+        if (!is_array($lessons)) return;
+
+        $geometry = $this->find_lesson_by_slug_or_title('geometric-figures-and-relationships', 'Geometric Figures and Relationships');
+        if ($geometry && isset($lessons['geometric-figures-and-relationships'])) {
+            $this->apply_completion_fields_to_lesson($geometry, $lessons['geometric-figures-and-relationships']);
+        }
+
+        $section_maps = [
+            'volume-area' => 'completion_content_key_for_measurement_title',
+            'probability-statistics' => 'completion_content_key_for_statistics_title',
+        ];
+        foreach ($section_maps as $section_slug => $resolver) {
+            $section_lessons = get_posts([
+                'post_type' => self::CPT,
+                'post_status' => ['publish', 'draft', 'pending', 'private', 'future'],
+                'posts_per_page' => -1,
+                'orderby' => 'menu_order title',
+                'order' => 'ASC',
+                'tax_query' => [[
+                    'taxonomy' => self::TAX,
+                    'field' => 'slug',
+                    'terms' => [$section_slug],
+                ]],
+            ]);
+            foreach ($section_lessons as $lesson) {
+                $key = $this->{$resolver}($lesson->post_title);
+                if ($key === '' || !isset($lessons[$key])) continue;
+                $this->apply_completion_fields_to_lesson($lesson, $lessons[$key]);
+            }
+        }
+
+        foreach ($lessons as $slug => $fields) {
+            if ($slug === 'geometric-figures-and-relationships' || !is_array($fields)) continue;
+            $title = isset($fields['title']) ? $fields['title'] : ucwords(str_replace('-', ' ', $slug));
+            $lesson = $this->find_lesson_by_slug_or_title($slug, $title);
+            if ($lesson) $this->apply_completion_fields_to_lesson($lesson, $fields);
+        }
+    }
+
+    private function find_fractions_decimals_lesson() {
+        $lesson = get_page_by_path('fractions-decimals', OBJECT, self::CPT);
+        if ($lesson) return $lesson;
+
+        $candidates = get_posts([
+            'post_type' => self::CPT,
+            'post_status' => ['publish', 'draft', 'pending', 'private', 'future'],
+            'posts_per_page' => -1,
+            'orderby' => 'ID',
+            'order' => 'ASC'
+        ]);
+
+        foreach ($candidates as $candidate) {
+            if (strcasecmp(trim((string) $candidate->post_title), 'Fractions & Decimals') === 0) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    public function maybe_repair_fractions_challenge() {
+        if (!current_user_can('manage_options')) return;
+
+        $fractions = $this->find_fractions_decimals_lesson();
+        if (!$fractions) return;
+
+        if (!$this->lesson_field_is_complete($fractions->ID, 'challenge_practice')) {
+            update_post_meta(
+                $fractions->ID,
+                '_mb_challenge_practice',
+                "Explain why a fraction in simplest form has a terminating decimal only when its denominator has no prime factors other than 2 and 5.\nCreate three different fractions between 0.4 and 0.5 and justify their placement."
+            );
+        }
+
+        if (!$this->lesson_field_is_complete($fractions->ID, 'challenge_practice')) return;
+
+        $completion = $this->lesson_completion_data($fractions->ID);
+        update_post_meta($fractions->ID, '_mb_gold_certification_percent', $completion['percent']);
+        update_post_meta($fractions->ID, '_mb_gold_certification_missing', $completion['missing']);
+        if (!$completion['missing']) {
+            update_post_meta($fractions->ID, '_mb_lesson_status', 'gold-certified');
+            update_post_meta($fractions->ID, '_mb_gold_certification', 'gold-ready');
+        }
+        update_option('mathbinder_fractions_challenge_repair', self::VERSION);
     }
 
     private function ensure_sections() {
@@ -3102,6 +3705,812 @@ final class MathBinder_Core {
         }
     }
 
+    private function public_page_definitions() {
+        return [
+            'parents' => [
+                'title' => 'Parent Resources',
+                'shortcode' => '[mathbinder_parents]',
+                'slugs' => ['parents', 'parent-resources']
+            ],
+            'teachers' => [
+                'title' => 'Teacher Resources',
+                'shortcode' => '[mathbinder_teachers]',
+                // The original PopularFX navigation uses /courses/.
+                'slugs' => ['courses', 'teachers', 'teacher-resources']
+            ],
+            'about' => [
+                'title' => 'About Us',
+                'shortcode' => '[mathbinder_about]',
+                // The original PopularFX navigation uses /about/.
+                'slugs' => ['about', 'about-us']
+            ],
+            'contact' => [
+                'title' => 'Contact Us',
+                'shortcode' => '[mathbinder_contact]',
+                'slugs' => ['contact', 'contact-us']
+            ],
+            'assignment_helper' => [
+                'title' => 'AI Assignment Tutor',
+                'shortcode' => '[mathbinder_assignment_helper]',
+                'slugs' => ['assignment-helper', 'ai-assignment-helper']
+            ],
+            'my_binder' => [
+                'title' => 'My MathBinder',
+                'shortcode' => '[mathbinder_collection]',
+                'slugs' => ['your-binder']
+            ],
+            'evidence_folder' => [
+                'title' => 'Evidence Folder',
+                'shortcode' => '[mathbinder_evidence_folder]',
+                'slugs' => ['evidence-folder']
+            ],
+            'getting_started' => [
+                'title' => 'Getting Started',
+                'shortcode' => '[mathbinder_getting_started]',
+                'slugs' => ['getting-started']
+            ],
+            'privacy' => [
+                'title' => 'Privacy Policy',
+                'shortcode' => '[mathbinder_privacy]',
+                'slugs' => ['privacy-policy']
+            ],
+            'terms' => [
+                'title' => 'Terms of Use',
+                'shortcode' => '[mathbinder_terms]',
+                'slugs' => ['terms-of-use']
+            ],
+            'premium_access' => [
+                'title' => 'Premium Access',
+                'shortcode' => '[mathbinder_premium_access]',
+                'slugs' => ['premium-access']
+            ],
+        ];
+    }
+
+    private function public_page_for_key($key) {
+        $definitions = $this->public_page_definitions();
+        if (!isset($definitions[$key])) return null;
+        foreach ($definitions[$key]['slugs'] as $slug) {
+            $page = get_page_by_path($slug, OBJECT, 'page');
+            if ($page) return $page;
+        }
+        return null;
+    }
+
+    private function public_page_url($key) {
+        $page = $this->public_page_for_key($key);
+        if ($page) return get_permalink($page->ID);
+        $definitions = $this->public_page_definitions();
+        $slug = isset($definitions[$key]) ? $definitions[$key]['slugs'][0] : '';
+        return home_url('/' . trim($slug, '/') . '/');
+    }
+
+    private function ensure_public_pages() {
+        $pages = $this->public_page_definitions();
+        $resolved = [];
+
+        foreach ($pages as $key => $details) {
+            $page = $this->public_page_for_key($key);
+            $slug = $page ? $page->post_name : $details['slugs'][0];
+            $data = [
+                'post_type' => 'page',
+                'post_status' => 'publish',
+                'post_title' => $details['title'],
+                'post_name' => $slug,
+                'post_content' => $details['shortcode']
+            ];
+
+            if ($page) {
+                $data['ID'] = $page->ID;
+                wp_update_post($data);
+                update_post_meta($page->ID, '_mb_managed_public_page', '1');
+                $resolved[$key] = $page->ID;
+            } else {
+                $page_id = wp_insert_post($data);
+                if ($page_id && !is_wp_error($page_id)) {
+                    update_post_meta($page_id, '_mb_managed_public_page', '1');
+                    $resolved[$key] = $page_id;
+                }
+            }
+        }
+
+        $this->retire_standalone_interactive_notebook();
+        $this->repair_public_page_menu_items($resolved);
+    }
+
+    private function retire_standalone_interactive_notebook() {
+        $notebook_pages = [];
+        foreach (['interactive-notebook', 'my-interactive-notebook'] as $slug) {
+            $page = get_page_by_path($slug, OBJECT, 'page');
+            if ($page) $notebook_pages[intval($page->ID)] = $page;
+        }
+
+        foreach ($notebook_pages as $page) {
+            if (get_post_meta($page->ID, '_mb_managed_public_page', true) === '1') {
+                wp_update_post([
+                    'ID' => $page->ID,
+                    'post_status' => 'draft'
+                ]);
+            }
+        }
+
+        foreach (wp_get_nav_menus() as $menu) {
+            foreach ((array) wp_get_nav_menu_items($menu->term_id) as $item) {
+                $title = strtolower(trim(wp_strip_all_tags($item->title)));
+                $object_id = intval($item->object_id);
+                if (in_array($title, ['interactive notebook', 'my interactive notebook'], true)
+                    || isset($notebook_pages[$object_id])) {
+                    wp_delete_post($item->ID, true);
+                }
+            }
+        }
+    }
+
+    private function repair_public_page_menu_items($resolved) {
+        if (!$resolved) return;
+        $labels = [
+            'parents' => ['parent', 'parents', 'parent resources'],
+            'teachers' => ['teacher', 'teachers', 'teacher resources'],
+            'about' => ['about', 'about us'],
+            'contact' => ['contact', 'contact us'],
+            'assignment_helper' => ['ai assignment tutor', 'assignment tutor', 'ai assignment helper', 'assignment helper'],
+            'my_binder' => ['my mathbinder', 'mathbinder', 'your binder'],
+        ];
+
+        foreach (wp_get_nav_menus() as $menu) {
+            $items = wp_get_nav_menu_items($menu->term_id);
+            if (!$items) continue;
+            $binder_item = null;
+            $parents_item = null;
+            $helper_item = null;
+            $my_binder_item = null;
+
+            foreach ($items as $item) {
+                $title = strtolower(trim(wp_strip_all_tags($item->title)));
+                if (in_array($title, ['binder topics', 'binder sections'], true)) {
+                    $binder_item = $item;
+                }
+                if (in_array($title, $labels['parents'], true)) {
+                    $parents_item = $item;
+                }
+                if (in_array($title, $labels['assignment_helper'], true)) {
+                    $helper_item = $item;
+                }
+                if (in_array($title, $labels['my_binder'], true)) {
+                    $my_binder_item = $item;
+                }
+
+                foreach ($labels as $key => $accepted) {
+                    if (!isset($resolved[$key]) || !in_array($title, $accepted, true)) continue;
+                    wp_update_nav_menu_item($menu->term_id, $item->ID, [
+                        'menu-item-title' => $key === 'assignment_helper' ? 'AI Assignment Tutor' : ($key === 'my_binder' ? 'My MathBinder' : $item->title),
+                        'menu-item-object-id' => $resolved[$key],
+                        'menu-item-object' => 'page',
+                        'menu-item-type' => 'post_type',
+                        'menu-item-status' => 'publish',
+                        'menu-item-parent-id' => $item->menu_item_parent,
+                        'menu-item-position' => $item->menu_order,
+                        'menu-item-target' => $item->target,
+                        'menu-item-classes' => implode(' ', array_filter((array) $item->classes)),
+                        'menu-item-xfn' => $item->xfn,
+                        'menu-item-description' => $item->description
+                    ]);
+                    break;
+                }
+            }
+
+            // Keep the student destinations together in the regular header menu:
+            // Binder Sections → My MathBinder → AI Assignment Tutor.
+            if (isset($resolved['assignment_helper'], $resolved['my_binder']) && $binder_item && $parents_item) {
+                $my_binder_item_id = $my_binder_item ? $my_binder_item->ID : 0;
+                $my_binder_item_id = wp_update_nav_menu_item($menu->term_id, $my_binder_item_id, [
+                    'menu-item-title' => 'My MathBinder',
+                    'menu-item-object-id' => $resolved['my_binder'],
+                    'menu-item-object' => 'page',
+                    'menu-item-type' => 'post_type',
+                    'menu-item-status' => 'publish',
+                    'menu-item-position' => intval($binder_item->menu_order) + 1
+                ]);
+                $helper_item_id = $helper_item ? $helper_item->ID : 0;
+                $helper_item_id = wp_update_nav_menu_item($menu->term_id, $helper_item_id, [
+                    'menu-item-title' => 'AI Assignment Tutor',
+                    'menu-item-object-id' => $resolved['assignment_helper'],
+                    'menu-item-object' => 'page',
+                    'menu-item-type' => 'post_type',
+                    'menu-item-status' => 'publish',
+                    'menu-item-position' => intval($binder_item->menu_order) + 2
+                ]);
+
+                // WordPress may resolve a single requested position after an
+                // existing neighboring item instead of before it. Rebuild the
+                // current top-level sequence explicitly, keeping every other
+                // item in its existing relative order.
+                if ($my_binder_item_id && !is_wp_error($my_binder_item_id) && $helper_item_id && !is_wp_error($helper_item_id)) {
+                    $ordered_items = wp_get_nav_menu_items($menu->term_id, [
+                        'orderby' => 'menu_order',
+                        'order' => 'ASC'
+                    ]);
+                    $top_level_ids = [];
+                    $my_binder_id = intval($my_binder_item_id);
+                    $helper_id = intval($helper_item_id);
+                    $binder_id = intval($binder_item->ID);
+
+                    foreach ((array) $ordered_items as $ordered_item) {
+                        if (intval($ordered_item->menu_item_parent) !== 0) continue;
+                        $item_id = intval($ordered_item->ID);
+                        if ($item_id !== $my_binder_id && $item_id !== $helper_id) $top_level_ids[] = $item_id;
+                    }
+
+                    $binder_index = array_search($binder_id, $top_level_ids, true);
+                    if ($binder_index !== false) {
+                        array_splice($top_level_ids, $binder_index + 1, 0, [$my_binder_id, $helper_id]);
+                        foreach ($top_level_ids as $index => $item_id) {
+                            wp_update_post([
+                                'ID' => $item_id,
+                                'menu_order' => $index + 1
+                            ]);
+                        }
+                        clean_term_cache($menu->term_id, 'nav_menu');
+                    }
+                }
+            }
+
+        }
+    }
+
+    private function public_page_header($eyebrow, $title, $description) {
+        $logo_url = plugin_dir_url(__FILE__) . 'Assests/Icons/mathbinder-icon.svg';
+
+        return '<header class="mb-public-hero"><div class="mb-public-hero-mark"><img src="' .
+            esc_url($logo_url) . '" alt="MathBinder logo"></div><div><p class="mb-public-eyebrow">' .
+            esc_html($eyebrow) . '</p><h1>' . esc_html($title) . '</h1><p>' .
+            esc_html($description) . '</p></div></header>';
+    }
+
+    public function parents_shortcode() {
+        if (class_exists('MathBinder_Family_Account') && MathBinder_Family_Account::is_parent()) {
+            return MathBinder_Family_Account::render_dashboard();
+        }
+        ob_start(); ?>
+        <main class="mb-public-page mb-parents-page">
+            <?php echo $this->public_page_header('Support at home', 'Parent Resources', 'Simple, practical ways to help your student build confidence, explain their thinking, and keep moving forward in math.'); ?>
+            <section class="mb-public-intro">
+                <div><span>Start here</span><h2>You do not have to reteach the whole lesson.</h2><p>MathBinder gives families short explanations, worked examples, videos, practice choices, and conversation starters. Begin with the student’s current lesson and use one small support at a time.</p></div>
+                <a class="mb-public-button" href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Find a math topic</a>
+            </section>
+            <section class="mb-public-grid mb-public-grid-three">
+                <article><div class="mb-public-icon">1</div><h3>Ask what they notice</h3><p>Before correcting the work, ask your student to explain what the problem is asking and which step feels confusing.</p></article>
+                <article><div class="mb-public-icon">2</div><h3>Use the lesson tabs</h3><p>Move through Teach It, Watch It, and Practice It. The Parent Help tab provides lesson-specific prompts and a five-minute review.</p></article>
+                <article><div class="mb-public-icon">3</div><h3>Celebrate the revision</h3><p>Focus on the thinking that improved—not only the final answer. Productive struggle helps mathematical confidence grow.</p></article>
+            </section>
+            <section class="mb-public-band">
+                <div><p class="mb-public-eyebrow">A helpful routine</p><h2>Try the 5–10–5 approach</h2></div>
+                <ol><li><strong>5 minutes:</strong> Read the lesson overview and identify the goal.</li><li><strong>10 minutes:</strong> Watch one video or work through one example together.</li><li><strong>5 minutes:</strong> Let the student try one problem independently and explain the strategy.</li></ol>
+            </section>
+            <section class="mb-public-split">
+                <div><p class="mb-public-eyebrow">When your student is stuck</p><h2>Questions that support thinking</h2><ul><li>What do you already know?</li><li>Can you draw, model, or estimate it?</li><li>Where did your answer stop making sense?</li><li>Which example in the lesson looks most similar?</li><li>How could you check your answer another way?</li></ul></div>
+                <aside><h3>Remember</h3><p>It is okay to pause. A short break, a simpler example, or returning to a prerequisite topic can be more productive than pushing through frustration.</p><a href="<?php echo esc_url($this->public_page_url('contact')); ?>">Contact MathBinder support</a></aside>
+            </section>
+        </main>
+        <?php return ob_get_clean();
+    }
+
+    public function teachers_shortcode() {
+        ob_start(); ?>
+        <main class="mb-public-page mb-teachers-page">
+            <?php echo $this->public_page_header('Plan • Teach • Respond', 'Teacher Resources', 'Use MathBinder as a flexible instructional companion for whole-group teaching, small-group intervention, independent practice, and family support.'); ?>
+            <section class="mb-public-intro">
+                <div><span>Built for flexible instruction</span><h2>Choose the support your students need.</h2><p>Each lesson combines concise teaching, visual examples, carefully selected videos, practice pathways, common misconceptions, and teacher-facing instructional notes.</p></div>
+                <a class="mb-public-button" href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Browse lesson sections</a>
+            </section>
+            <section class="mb-public-grid mb-public-grid-four">
+                <article><div class="mb-public-icon">A</div><h3>Launch</h3><p>Use the essential question and At a Glance information to frame the learning goal.</p></article>
+                <article><div class="mb-public-icon">B</div><h3>Model</h3><p>Select a worked example or Watch It video for a focused mini-lesson.</p></article>
+                <article><div class="mb-public-icon">C</div><h3>Practice</h3><p>Assign a targeted resource or use the practice progression for gradual release.</p></article>
+                <article><div class="mb-public-icon">D</div><h3>Respond</h3><p>Use misconceptions, formative checks, and differentiation notes to plan the next step.</p></article>
+            </section>
+            <section class="mb-public-band">
+                <div><p class="mb-public-eyebrow">Inside every complete lesson</p><h2>Instructional tools in one place</h2></div>
+                <ul class="mb-public-checks"><li>Learning targets and vocabulary</li><li>Worked examples and common mistakes</li><li>Videos and external practice resources</li><li>Parent help and home-review prompts</li><li>Teacher objectives and pacing</li><li>Differentiation and formative assessment</li></ul>
+            </section>
+            <section class="mb-public-split">
+                <div><p class="mb-public-eyebrow">Suggested uses</p><h2>Make MathBinder fit your setting</h2><ul><li>Link one lesson inside your LMS.</li><li>Use a video before a small-group conference.</li><li>Send the Parent Help section after a family meeting.</li><li>Use common mistakes to plan an exit ticket.</li><li>Let students revisit prerequisite lessons independently.</li></ul></div>
+                <aside><h3>Teacher principle</h3><p>MathBinder is designed to supplement professional instruction and curriculum—not replace teacher judgment. Select, adapt, and sequence resources for the learners in front of you.</p><a href="<?php echo esc_url($this->public_page_url('contact')); ?>">Share feedback or request a topic</a></aside>
+            </section>
+        </main>
+        <?php return ob_get_clean();
+    }
+
+    public function about_shortcode() {
+        ob_start(); ?>
+        <main class="mb-public-page mb-about-page">
+            <?php echo $this->public_page_header('Find it. Learn it. Master it.', 'About MathBinder', 'A student-friendly digital math binder created to make trustworthy help easier to find, understand, and use.'); ?>
+            <section class="mb-public-story">
+                <div><p class="mb-public-eyebrow">Why MathBinder exists</p><h2>Math help should feel organized—not overwhelming.</h2><p>Students and families often search across many websites, videos, and assignments before finding an explanation that makes sense. MathBinder brings those supports together by topic, so learners can focus on the mathematics instead of searching for it.</p><p>The site begins with middle-school mathematics and is designed to grow into a K–12 resource while preserving the same clear, consistent lesson experience.</p></div>
+                <div class="mb-public-values"><article><strong>Find it.</strong><p>Search by math topic instead of guessing a grade level or course name.</p></article><article><strong>Learn it.</strong><p>Choose explanations, examples, and videos that match how you learn.</p></article><article><strong>Master it.</strong><p>Practice, reflect, revise, and build confidence over time.</p></article></div>
+            </section>
+            <section class="mb-public-band mb-public-mission">
+                <div><p class="mb-public-eyebrow">Our mission</p><h2>Make high-quality math support accessible, understandable, and empowering.</h2></div>
+                <p>MathBinder supports student agency, mathematical reasoning, and productive struggle. It gives teachers and families practical tools while keeping the learner’s thinking at the center.</p>
+            </section>
+            <section class="mb-public-grid mb-public-grid-three">
+                <article><div class="mb-public-icon">✓</div><h3>Student centered</h3><p>Pages use predictable sections, plain language, and multiple ways to engage with a concept.</p></article>
+                <article><div class="mb-public-icon">∞</div><h3>Built to grow</h3><p>The binder structure supports new lessons, grade bands, and tools without becoming harder to navigate.</p></article>
+                <article><div class="mb-public-icon">★</div><h3>Educator guided</h3><p>Content is shaped by classroom experience, instructional practice, and a commitment to useful resources.</p></article>
+            </section>
+            <div class="mb-public-cta"><div><h2>Ready to explore?</h2><p>Open the binder and choose the topic you need today.</p></div><a class="mb-public-button" href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Explore the Binder</a></div>
+        </main>
+        <?php return ob_get_clean();
+    }
+
+    public function getting_started_shortcode() {
+        ob_start(); ?>
+        <main class="mb-public-page mb-launch-page">
+            <?php echo $this->public_page_header('Welcome to MathBinder', 'Getting Started', 'Choose your role for a clear path from account setup to confident learning.'); ?>
+            <section class="mb-public-grid mb-public-grid-four">
+                <article><div class="mb-public-icon">S</div><h3>Students</h3><ol><li>Log in with your permanent MathBinder account.</li><li>Open Student Dashboard and join a class with the teacher’s class code.</li><li>Open Assigned Learning or Continue Learning.</li><li>Use Teach It, Watch It, Practice It, My Math Notes, and the mastery check.</li><li>Track progress, badges, saved work, and binder decorations.</li></ol><a href="<?php echo esc_url(home_url('/student-dashboard/')); ?>">Open Student Dashboard</a></article>
+                <article><div class="mb-public-icon">P</div><h3>Parents &amp; caregivers</h3><ol><li>Create and verify the adult account.</li><li>Add each child and approve access when using a family account.</li><li>Manage child logins and available premium spots.</li><li>Use Parent Help inside lessons to support learning.</li><li>Contact support without sharing passwords or student records.</li></ol><a href="<?php echo esc_url($this->public_page_url('parents')); ?>">Open Parent Resources</a></article>
+                <article><div class="mb-public-icon">T</div><h3>Teachers</h3><ol><li>Log in to the Teacher Dashboard.</li><li>Confirm the correct organization, term, and class.</li><li>Share the class code with authorized students.</li><li>Build, preview, publish, and assign a Mastery Path.</li><li>Review progress, evidence, mastery, and exported reports.</li></ol><a href="<?php echo esc_url(home_url('/teacher-dashboard/')); ?>">Open Teacher Dashboard</a></article>
+                <article><div class="mb-public-icon">A</div><h3>Administrators</h3><ol><li>Create the organization and active term.</li><li>Create classes and assign teachers.</li><li>Review memberships and enrollment.</li><li>Allocate, activate, or revoke premium seats.</li><li>Monitor license usage, roles, and audit history.</li></ol><a href="<?php echo esc_url(admin_url('admin.php?page=mathbinder-organizations')); ?>">Open Organization Tools</a></article>
+            </section>
+            <section class="mb-public-band"><div><p class="mb-public-eyebrow">Student authorization</p><h2>Two safe ways for a minor to begin</h2></div><div><p><strong>Family path:</strong> A verified parent or caregiver creates or approves the child account.</p><p><strong>School path:</strong> An authorized school organization enrolls the student under its approved process, without requiring a duplicate family account.</p><p>A learner keeps one MathBinder identity as roles, classes, schools, licenses, and future connections change.</p></div></section>
+            <section class="mb-public-split"><div><p class="mb-public-eyebrow">Need help?</p><h2>Account and access recovery</h2><p>Do not create a second account when a student changes classes, schools, or plans. Use password recovery first, then contact support for duplicate-account or school-parent connection help.</p></div><aside><h3>Protect student information</h3><p>Never send passwords, grades, student records, or private school documents through the contact form.</p><a href="<?php echo esc_url($this->public_page_url('contact')); ?>">Contact MathBinder support</a></aside></section>
+        </main>
+        <?php return ob_get_clean();
+    }
+
+    public function privacy_shortcode() {
+        ob_start(); ?>
+        <main class="mb-public-page mb-launch-page mb-policy-page">
+            <?php echo $this->public_page_header('Effective August 5, 2026', 'Privacy Policy', 'How MathBinder handles account, learning, organization, and support information.'); ?>
+            <section class="mb-public-band"><div><h2>Privacy at a glance</h2></div><div><p>MathBinder collects only information needed to provide accounts, classes, learning activities, progress, support, licensing, and security. Access is limited by role and organization. MathBinder does not ask users to place passwords, grades, or student records in public forms.</p><p><strong>Important:</strong> This policy must be reviewed by MathBinder’s owner and qualified counsel before public commercial or school launch.</p></div></section>
+            <section class="mb-public-grid mb-public-grid-two">
+                <article><h2>Information we process</h2><ul><li>Account and verification details, such as name, email, role, and login status.</li><li>Parent-child and school-authorized enrollment relationships.</li><li>Organization, term, class, membership, invitation, license, and seat records.</li><li>Assignments, lesson completion, notes, saved items, evidence, mastery attempts, scores, and badges.</li><li>Support messages, security events, audit history, and essential technical logs.</li><li>Subscription status and payment-provider references; MathBinder should not store full payment-card numbers.</li></ul></article>
+                <article><h2>How information is used</h2><ul><li>Provide and secure the service.</li><li>Connect authorized learners with families, teachers, classes, and assignments.</li><li>Save progress across devices and display authorized reports.</li><li>Manage premium access, licenses, seats, trials, and account recovery.</li><li>Respond to support requests and maintain audit records.</li><li>Improve accessibility, reliability, and learning workflows.</li></ul></article>
+                <article><h2>Visibility and sharing</h2><p>Students see their own learning information. Verified parents see connected children as authorized. Teachers and administrators see only learners and records within their assigned classes or organization scope. Service providers receive only information needed to operate their function and must be governed by appropriate agreements. MathBinder does not sell student personal information.</p></article>
+                <article><h2>Retention and account changes</h2><p>MathBinder preserves learning work when a class, license, subscription, school relationship, or future Canvas connection ends, unless deletion is requested or law requires another result. Retention periods should match educational, contractual, security, and legal needs. Cancellation should stop paid coverage without silently erasing student work.</p></article>
+                <article><h2>Choices and requests</h2><p>Authorized users may request access, correction, export, connection review, or deletion through the Contact page. MathBinder must verify identity and authority before changing a minor’s or organization’s records. Some security, transaction, or audit records may be retained when legally required.</p></article>
+                <article><h2>Children and school use</h2><p>A minor may be authorized by a verified parent/caregiver or through an approved school process. Schools remain responsible for their notices, permissions, and legal basis for student use. MathBinder should use privacy-protective defaults and avoid public student reporting.</p></article>
+            </section>
+            <div class="mb-public-cta"><div><h2>Privacy question or request?</h2><p>Use the support form and select the closest subject. Do not include passwords or unnecessary student records.</p></div><a class="mb-public-button" href="<?php echo esc_url($this->public_page_url('contact')); ?>">Contact MathBinder</a></div>
+        </main>
+        <?php return ob_get_clean();
+    }
+
+    public function terms_shortcode() {
+        ob_start(); ?>
+        <main class="mb-public-page mb-launch-page mb-policy-page">
+            <?php echo $this->public_page_header('Effective August 5, 2026', 'Terms of Use', 'Rules for using MathBinder accounts, lessons, classes, and premium features.'); ?>
+            <section class="mb-public-band"><div><h2>Agreement and review</h2></div><div><p>By using MathBinder, users agree to use the service lawfully, protect account access, respect educational content and other users, and follow the rules below. Parents, schools, and organizations are responsible for authorizing minors and managing their assigned users.</p><p><strong>Important:</strong> These terms are a launch draft and must be reviewed by MathBinder’s owner and qualified counsel before public commercial or school launch.</p></div></section>
+            <section class="mb-public-grid mb-public-grid-two">
+                <article><h2>Accounts and authorization</h2><p>Provide accurate information, keep credentials private, and use one permanent identity rather than creating duplicates. A parent/caregiver or authorized school must approve a minor’s access. Teachers and administrators may use only records within their authorized scope.</p></article>
+                <article><h2>Acceptable use</h2><p>Do not disrupt the service, bypass access controls, impersonate another person, upload harmful code, expose student information, misuse AI or assessment tools, or copy and redistribute protected materials beyond allowed educational use.</p></article>
+                <article><h2>Learning and assessment</h2><p>MathBinder supports instruction and practice but does not replace professional educational judgment. Teachers and schools remain responsible for assignments, grades, accommodations, placement, and high-stakes decisions. Automated or AI feedback must not independently determine grades or mastery.</p></article>
+                <article><h2>Premium access and billing</h2><p>Paid plans, trials, licenses, and seats provide the features shown at purchase or allocation. Coverage may have priority rules when family and organization access overlap. Payment failure may trigger a stated grace period. Cancellation ends future paid coverage but should not erase saved student work.</p></article>
+                <article><h2>Content and external services</h2><p>MathBinder owns or licenses its original site content. Linked or embedded resources remain subject to their owners’ terms. Users retain ownership of their original notes and submitted work while granting MathBinder the limited permission needed to store and display that content for the service.</p></article>
+                <article><h2>Availability and changes</h2><p>Features may be updated for safety, law, accessibility, or reliability. MathBinder may suspend accounts or access that threaten users, data, or the service. Material term changes should be posted with a new effective date and any notice required by law or contract.</p></article>
+            </section>
+            <div class="mb-public-cta"><div><h2>Questions about these terms?</h2><p>Contact MathBinder before using the service if you do not understand an account, school, or premium-access requirement.</p></div><a class="mb-public-button" href="<?php echo esc_url($this->public_page_url('contact')); ?>">Contact MathBinder</a></div>
+        </main>
+        <?php return ob_get_clean();
+    }
+
+    public function premium_access_shortcode() {
+        ob_start(); ?>
+        <main class="mb-public-page mb-launch-page">
+            <?php echo $this->public_page_header('Plans • Licenses • Seats', 'Premium Access', 'Understand how family and organization access is assigned without losing student work.'); ?>
+            <section class="mb-public-grid mb-public-grid-three">
+                <article><div class="mb-public-icon">F</div><h3>Family Premium</h3><p>A verified parent or caregiver manages the plan and available child spots. Child access can be paused or restored without creating a new learner identity.</p></article>
+                <article><div class="mb-public-icon">O</div><h3>Organization access</h3><p>A school or organization manages its license, terms, classes, teachers, memberships, and premium-seat allocations. Seats may be assigned by account email before a matching WordPress user exists.</p></article>
+                <article><div class="mb-public-icon">1</div><h3>One student identity</h3><p>When family and organization coverage overlap, MathBinder applies the appropriate active coverage while preserving one account, learning history, notes, mastery, and badges.</p></article>
+            </section>
+            <section class="mb-public-band"><div><p class="mb-public-eyebrow">Coverage lifecycle</p><h2>What happens when access changes?</h2></div><ol><li><strong>Trial or plan begins:</strong> Eligible premium features activate after confirmation.</li><li><strong>A seat is allocated:</strong> The allocation is reviewable and auditable by the organization.</li><li><strong>Coverage overlaps:</strong> Active family or organization coverage is resolved without duplicating the student.</li><li><strong>Payment fails or a seat is revoked:</strong> Any configured grace or status rules apply.</li><li><strong>Coverage ends:</strong> Premium features may pause, but saved student work is preserved according to the Privacy Policy.</li></ol></section>
+            <section class="mb-public-split"><div><h2>Before purchasing or assigning access</h2><ul><li>Review the current plan, price, trial, renewal, cancellation, and seat limits shown at checkout or in the license dashboard.</li><li>Use the account email that should own or receive access.</li><li>Confirm the correct organization and term before allocating school seats.</li><li>Do not create a second learner account to solve an access problem.</li></ul></div><aside><h3>Billing or seat help</h3><p>Contact support for duplicate accounts, incorrect coverage, failed linking, cancellations, or seat-allocation questions.</p><a href="<?php echo esc_url($this->public_page_url('contact')); ?>">Contact MathBinder support</a></aside></section>
+        </main>
+        <?php return ob_get_clean();
+    }
+
+    public function contact_shortcode() {
+        $status = isset($_GET['mb_contact']) ? sanitize_key(wp_unslash($_GET['mb_contact'])) : '';
+        ob_start(); ?>
+        <main class="mb-public-page mb-contact-page">
+            <?php echo $this->public_page_header('We would love to hear from you', 'Contact MathBinder', 'Ask a question, report a problem, suggest a lesson, or share how MathBinder is helping your student or class.'); ?>
+            <?php if ($status === 'success') : ?><div class="mb-contact-message mb-contact-success" role="status"><strong>Message sent.</strong> Thank you for contacting MathBinder. We will respond as soon as possible.</div><?php endif; ?>
+            <?php if ($status === 'error') : ?><div class="mb-contact-message mb-contact-error" role="alert"><strong>Your message could not be sent.</strong> Please check the required fields and try again.</div><?php endif; ?>
+            <section class="mb-contact-layout">
+                <div class="mb-contact-info">
+                    <p class="mb-public-eyebrow">How can we help?</p><h2>Send us a message.</h2>
+                    <div class="mb-contact-reasons"><article><span>?</span><div><h3>Questions</h3><p>Get help finding or using a MathBinder resource.</p></div></article><article><span>＋</span><div><h3>Topic requests</h3><p>Suggest a concept you would like added to the binder.</p></div></article><article><span>!</span><div><h3>Corrections</h3><p>Tell us about a broken link, unclear explanation, or technical issue.</p></div></article></div>
+                    <p class="mb-contact-note">Please do not include student records, passwords, grades, or other sensitive personal information.</p>
+                </div>
+                <form class="mb-contact-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post">
+                    <input type="hidden" name="action" value="mb_contact_submit">
+                    <?php wp_nonce_field('mb_contact_submit', 'mb_contact_nonce'); ?>
+                    <div class="mb-contact-hp" aria-hidden="true"><label>Leave this field empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+                    <label>Your name <span>*</span><input type="text" name="mb_name" required maxlength="100" autocomplete="name"></label>
+                    <label>Email address <span>*</span><input type="email" name="mb_email" required maxlength="190" autocomplete="email"></label>
+                    <label>I am a <select name="mb_role"><option value="student">Student</option><option value="parent">Parent or caregiver</option><option value="teacher">Teacher or educator</option><option value="other">Other</option></select></label>
+                    <label>Subject <span>*</span><select name="mb_subject" required><option value="General question">General question</option><option value="Account or access">Account or access</option><option value="Billing or premium seat">Billing or premium seat</option><option value="Privacy request">Privacy request</option><option value="Topic request">Topic request</option><option value="Broken link or correction">Broken link or correction</option><option value="Technical problem">Technical problem</option><option value="Feedback">Feedback</option></select></label>
+                    <label>Message <span>*</span><textarea name="mb_message" required maxlength="4000" rows="7"></textarea></label>
+                    <button class="mb-public-button" type="submit">Send message</button>
+                </form>
+            </section>
+        </main>
+        <?php return ob_get_clean();
+    }
+
+    private function place_value_notebook_activities() {
+        return [
+            [
+                'id' => 'place-value-targets',
+                'type' => 'I Can + Reflection',
+                'title' => 'Place Value Learning Targets',
+                'description' => 'Check each goal as it becomes comfortable, then reflect on what helped.',
+                'prompt' => 'I can name the place and value of a digit.|I can read and write whole numbers in standard, word, and expanded form.|I can compare whole numbers using <, >, and =.|I can explain how a digit’s value changes when it moves one place.',
+                'fields' => 'One goal I feel confident about|One goal I want to practice|A strategy that helped me'
+            ],
+            [
+                'id' => 'place-value-vocabulary',
+                'type' => 'Vocabulary Foldable',
+                'title' => 'Place Value Vocabulary Flaps',
+                'description' => 'Define, illustrate, and use four important words. The print version includes cut and fold guides.',
+                'prompt' => 'digit|place|value|expanded form',
+                'fields' => 'My example|A picture or model|In my own words'
+            ],
+            [
+                'id' => 'place-value-chart',
+                'type' => 'Foldable Notes',
+                'title' => 'Build a Place Value Chart',
+                'description' => 'Organize a number by period, place, digit, and value.',
+                'prompt' => 'Millions|Hundred Thousands|Ten Thousands|Thousands|Hundreds|Tens|Ones',
+                'fields' => 'Number I am modeling|Expanded form|Number in words'
+            ],
+            [
+                'id' => 'place-value-worked-example',
+                'type' => 'Worked Example',
+                'title' => 'I Do • We Do • You Do',
+                'description' => 'Study one model, complete one guided example, and explain one independently.',
+                'prompt' => 'I Do: 483,216 = 400,000 + 80,000 + 3,000 + 200 + 10 + 6|We Do: Write 705,094 in expanded form.|You Do: Choose a six-digit number and show three forms.',
+                'fields' => 'My guided work|My independent example|How I checked my answer'
+            ],
+            [
+                'id' => 'place-value-anchor-chart',
+                'type' => 'Anchor Chart',
+                'title' => 'Place Value Quick Reference',
+                'description' => 'Create a personal reminder page for reading, writing, comparing, and checking numbers.',
+                'prompt' => 'Name the place before stating the value.|Read numbers in groups of three digits.|Compare from the greatest place first.|Use zero as a placeholder when a place has no amount.',
+                'fields' => 'A reminder that helps me|A common mistake to avoid|My own example'
+            ],
+            [
+                'id' => 'place-value-exit-ticket',
+                'type' => 'Exit Ticket',
+                'title' => 'Place Value Check-In',
+                'description' => 'Show what you know and choose the next step that would help.',
+                'prompt' => 'In 684,231, what is the value of the digit 8?|Write 900,000 + 20,000 + 7 in standard form.|Which is greater: 507,120 or 507,102? Explain.',
+                'fields' => 'My answers|The part I understand best|My next step'
+            ]
+        ];
+    }
+
+    public function render_lesson_notebook_tools($post_id, $lesson_title, $section_title = '') {
+        $context = strtolower(wp_strip_all_tags($lesson_title . ' ' . $section_title));
+        $activities = [];
+
+        if (strpos($context, 'place value') !== false) {
+            $activities = $this->place_value_notebook_activities();
+        }
+
+        /**
+         * Content Packs can supply lesson-specific interactive notebook pages.
+         * Each activity uses id, type, title, description, prompt, and fields.
+         */
+        $activities = apply_filters(
+            'mathbinder_lesson_notebook_activities',
+            $activities,
+            intval($post_id),
+            $lesson_title,
+            $section_title
+        );
+
+        if (!$activities || !is_array($activities)) return '';
+
+        ob_start(); ?>
+        <section id="interactive-notebook-pages" class="mb-binder-subsection mb-lesson-notebook-tools" data-mb-notebook
+            data-mb-notebook-lesson="<?php echo esc_attr(intval($post_id)); ?>"
+            data-mb-lesson-title="<?php echo esc_attr($lesson_title); ?>"
+            data-mb-section-title="<?php echo esc_attr($section_title); ?>"
+            data-mb-lesson-url="<?php echo esc_url(get_permalink($post_id)); ?>"
+            data-mb-binder-url="<?php echo esc_url(home_url('/your-binder/')); ?>">
+            <div class="mb-binder-subheading mb-lesson-notebook-heading">
+                <div>
+                    <span>Interactive Notebook</span>
+                    <h3>Choose what to add to your binder</h3>
+                    <p>Add a page to My MathBinder to type, draw, insert math symbols or emojis, and print your work.</p>
+                </div>
+                <strong><span data-mb-binder-count>0</span> saved</strong>
+            </div>
+
+            <div class="mb-notebook-grid">
+                <?php foreach ($activities as $activity) : ?>
+                    <article class="mb-notebook-card" data-notebook-id="<?php echo esc_attr($activity['id']); ?>"
+                        data-notebook-title="<?php echo esc_attr($activity['title']); ?>"
+                        data-notebook-type="<?php echo esc_attr($activity['type']); ?>">
+                        <span class="mb-notebook-type"><?php echo esc_html($activity['type']); ?></span>
+                        <h3><?php echo esc_html($activity['title']); ?></h3>
+                        <p><?php echo esc_html($activity['description']); ?></p>
+                        <div class="mb-notebook-preview">
+                            <?php foreach (explode('|', $activity['prompt']) as $line) : ?>
+                                <div><?php echo esc_html($line); ?></div>
+                            <?php endforeach; ?>
+                        </div>
+                        <script type="application/json" class="mb-notebook-data"><?php echo wp_json_encode($activity); ?></script>
+                        <div class="mb-notebook-actions">
+                            <button type="button" class="mb-button mb-add-notebook">Add to My Binder</button>
+                            <button type="button" class="mb-button-secondary mb-print-notebook">Print Blank Copy</button>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="mb-lesson-notebook-saved">
+                <div class="mb-my-binder-heading">
+                    <div><p class="mb-public-kicker">Saved on this device</p><h3>My pages from this lesson</h3></div>
+                </div>
+                <p class="mb-notebook-device-note">Your typed entries save in this browser. They do not yet follow you to another device.</p>
+                <div data-my-binder-list></div>
+                <div class="mb-notebook-empty" data-my-binder-empty>
+                    <strong>No interactive pages added yet.</strong>
+                    <p>Choose <em>Add to My Binder</em> on any page above.</p>
+                </div>
+            </div>
+            <div class="mb-binder-toast" data-mb-binder-toast hidden aria-live="polite"></div>
+        </section>
+        <?php
+        return ob_get_clean();
+    }
+
+    public function interactive_notebook_shortcode() {
+        $activities = $this->place_value_notebook_activities();
+
+        ob_start(); ?>
+        <main class="mb-public-page mb-notebook-page" data-mb-notebook>
+            <?php echo $this->public_page_header('Create • Save • Print', 'Interactive Notebook', 'Build a personal math reference online or print original MathBinder pages for a physical binder.'); ?>
+            <section class="mb-notebook-intro">
+                <div>
+                    <p class="mb-public-kicker">Place Value starter collection</p>
+                    <h2>Choose the notes that help you learn</h2>
+                    <p>Notebook pages are learning tools, not another assignment. Add any page to <strong>My Binder</strong>, type and save your thinking, or print a blank copy to complete by hand.</p>
+                </div>
+                <div class="mb-notebook-count" aria-live="polite"><strong data-mb-binder-count>0</strong><span>pages in My Binder</span></div>
+            </section>
+
+            <nav class="mb-notebook-tabs" aria-label="Interactive notebook views">
+                <button type="button" class="is-active" data-notebook-tab="library">Notebook Library</button>
+                <button type="button" data-notebook-tab="binder">My Binder <span data-mb-binder-badge>0</span></button>
+            </nav>
+
+            <section class="mb-notebook-library" data-notebook-panel="library">
+                <div class="mb-notebook-grid">
+                    <?php foreach ($activities as $activity) : ?>
+                        <article class="mb-notebook-card" data-notebook-id="<?php echo esc_attr($activity['id']); ?>"
+                            data-notebook-title="<?php echo esc_attr($activity['title']); ?>"
+                            data-notebook-type="<?php echo esc_attr($activity['type']); ?>">
+                            <span class="mb-notebook-type"><?php echo esc_html($activity['type']); ?></span>
+                            <h3><?php echo esc_html($activity['title']); ?></h3>
+                            <p><?php echo esc_html($activity['description']); ?></p>
+                            <div class="mb-notebook-preview">
+                                <?php foreach (explode('|', $activity['prompt']) as $line) : ?>
+                                    <div><?php echo esc_html($line); ?></div>
+                                <?php endforeach; ?>
+                            </div>
+                            <script type="application/json" class="mb-notebook-data"><?php echo wp_json_encode($activity); ?></script>
+                            <div class="mb-notebook-actions">
+                                <button type="button" class="mb-button mb-add-notebook">Add to My Binder</button>
+                                <button type="button" class="mb-button-secondary mb-print-notebook">Print It</button>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+
+            <section class="mb-my-binder" data-notebook-panel="binder" hidden>
+                <div class="mb-my-binder-heading">
+                    <div><p class="mb-public-kicker">Saved on this device</p><h2>My Binder</h2></div>
+                    <button type="button" class="mb-button-secondary" data-print-all-notebook>Print My Binder</button>
+                </div>
+                <p class="mb-notebook-device-note">Your entries save automatically in this browser. They do not yet follow you to another device.</p>
+                <div data-my-binder-list></div>
+                <div class="mb-notebook-empty" data-my-binder-empty>
+                    <strong>Your binder is ready for its first page.</strong>
+                    <p>Return to the Notebook Library and choose <em>Add to My Binder</em>.</p>
+                </div>
+            </section>
+        </main>
+        <?php
+        return ob_get_clean();
+    }
+
+    public function assignment_helper_shortcode() {
+        $configured = defined('MATHBINDER_OPENAI_API_KEY') && trim((string) MATHBINDER_OPENAI_API_KEY) !== '';
+        ob_start(); ?>
+        <main class="mb-public-page mb-assignment-page">
+            <?php echo $this->public_page_header('Upload • Reflect • Revise', 'AI Assignment Tutor', 'Get a helpful next step without having the answer simply given to you.'); ?>
+            <section class="mb-assignment-safety">
+                <strong>Protect your privacy.</strong>
+                <span>Remove your name, school, student ID, grade report, email address, and any other personal information before uploading.</span>
+            </section>
+            <?php if (!$configured): ?>
+                <section class="mb-assignment-unavailable">
+                    <div class="mb-assignment-lock" aria-hidden="true">🔒</div>
+                    <div><p class="mb-public-eyebrow">Teacher setup required</p><h2>The helper is almost ready.</h2><p>The secure AI connection has not been enabled yet. No file can be uploaded or sent while the connection is off.</p></div>
+                </section>
+            <?php else: ?>
+                <form id="mb-assignment-form" class="mb-assignment-form" enctype="multipart/form-data">
+                    <section class="mb-assignment-step">
+                        <div class="mb-assignment-step-number">1</div>
+                        <div><h2>Upload your work</h2><p>Choose one clear screenshot or PDF showing both the problem and your attempt.</p>
+                            <label class="mb-assignment-drop" for="mb-assignment-file">
+                                <strong>Choose a PDF or image</strong><span>PDF, JPG, PNG, or WEBP • 8 MB maximum</span>
+                                <input required id="mb-assignment-file" name="assignment_file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp">
+                            </label>
+                        </div>
+                    </section>
+                    <section class="mb-assignment-step">
+                        <div class="mb-assignment-step-number">2</div>
+                        <div><h2>Tell us about your attempt</h2><p>Explaining what you tried helps the tutor give a useful hint.</p>
+                            <label for="mb-assignment-attempt">What strategy did you try, and where did you get stuck?</label>
+                            <textarea required minlength="12" maxlength="1200" id="mb-assignment-attempt" name="attempt" rows="5"></textarea>
+                            <label class="mb-assignment-consent"><input required type="checkbox" name="privacy_confirmed" value="1"> I removed personal information and understand this file will be sent to an AI service for feedback.</label>
+                        </div>
+                    </section>
+                    <button class="mb-public-button mb-assignment-submit" type="submit">Help me find my next step</button>
+                    <p class="mb-assignment-status" id="mb-assignment-status" role="status" aria-live="polite"></p>
+                </form>
+                <section class="mb-assignment-result" id="mb-assignment-result" hidden>
+                    <p class="mb-public-eyebrow">Your coaching feedback</p>
+                    <div class="mb-assignment-result-grid">
+                        <article><span>1</span><h3>What I notice</h3><p data-field="notice"></p></article>
+                        <article><span>2</span><h3>First likely mistake</h3><p data-field="mistake"></p></article>
+                        <article><span>3</span><h3>Guiding question</h3><p data-field="question"></p></article>
+                        <article><span>4</span><h3>Your next step</h3><p data-field="next_step"></p></article>
+                    </div>
+                    <p class="mb-assignment-encouragement" data-field="encouragement"></p>
+                </section>
+            <?php endif; ?>
+            <section class="mb-assignment-how">
+                <h2>How the helper supports learning</h2>
+                <div><article><strong>It studies your attempt.</strong><p>Feedback begins with your mathematical thinking—not just the final answer.</p></article><article><strong>It gives one useful hint.</strong><p>The first response focuses on the earliest likely error or missing idea.</p></article><article><strong>You stay in charge.</strong><p>You revise, check your reasoning, and build toward the solution.</p></article></div>
+            </section>
+        </main>
+        <?php return ob_get_clean();
+    }
+
+    private function assignment_feedback_schema() {
+        return [
+            'type' => 'object',
+            'additionalProperties' => false,
+            'properties' => [
+                'notice' => ['type' => 'string'],
+                'mistake' => ['type' => 'string'],
+                'question' => ['type' => 'string'],
+                'next_step' => ['type' => 'string'],
+                'encouragement' => ['type' => 'string']
+            ],
+            'required' => ['notice', 'mistake', 'question', 'next_step', 'encouragement']
+        ];
+    }
+
+    public function ajax_assignment_feedback() {
+        check_ajax_referer('mb_assignment_feedback_nonce', 'nonce');
+        if (!defined('MATHBINDER_OPENAI_API_KEY') || trim((string) MATHBINDER_OPENAI_API_KEY) === '') {
+            wp_send_json_error(['message' => 'The secure AI connection is not configured.'], 503);
+        }
+
+        $attempt = isset($_POST['attempt']) ? sanitize_textarea_field(wp_unslash($_POST['attempt'])) : '';
+        if (strlen($attempt) < 12 || empty($_POST['privacy_confirmed'])) {
+            wp_send_json_error(['message' => 'Describe your attempt and confirm the privacy notice.'], 400);
+        }
+        if (!isset($_FILES['assignment_file']) || !is_array($_FILES['assignment_file'])) {
+            wp_send_json_error(['message' => 'Choose one PDF or image.'], 400);
+        }
+
+        $file = $_FILES['assignment_file'];
+        if (!empty($file['error']) || intval($file['size']) < 1 || intval($file['size']) > 8 * MB_IN_BYTES) {
+            wp_send_json_error(['message' => 'The file could not be read or is larger than 8 MB.'], 400);
+        }
+        $allowed = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+        $checked = wp_check_filetype_and_ext($file['tmp_name'], $file['name']);
+        $mime = isset($checked['type']) ? $checked['type'] : '';
+        if (!in_array($mime, $allowed, true)) {
+            wp_send_json_error(['message' => 'Use a PDF, JPG, PNG, or WEBP file.'], 400);
+        }
+
+        $rate_key = 'mb_ai_' . hash('sha256', (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $uses = intval(get_transient($rate_key));
+        if ($uses >= 6) wp_send_json_error(['message' => 'Please wait before requesting more feedback.'], 429);
+        set_transient($rate_key, $uses + 1, HOUR_IN_SECONDS);
+
+        $bytes = file_get_contents($file['tmp_name']);
+        if ($bytes === false) wp_send_json_error(['message' => 'The uploaded file could not be read.'], 400);
+        $data_url = 'data:' . $mime . ';base64,' . base64_encode($bytes);
+        $content_type = $mime === 'application/pdf' ? 'input_file' : 'input_image';
+        $file_input = $mime === 'application/pdf'
+            ? ['type' => $content_type, 'filename' => sanitize_file_name($file['name']), 'file_data' => $data_url, 'detail' => 'high']
+            : ['type' => $content_type, 'image_url' => $data_url, 'detail' => 'high'];
+
+        $instructions = 'You are the MathBinder AI Assignment Tutor, a patient K-12 math coach. Analyze the problem and the student work. Focus on the earliest likely mathematical mistake or missing idea. Do not reveal the final answer, complete the assignment, or provide a full solution. Give one concise guiding question and one small next step. If the work is unreadable or not mathematics, say so honestly. Use clear, student-friendly language. When you use a formal mathematical term that may be unfamiliar to a K-12 student, immediately follow it with a short, commonly used explanation in parentheses, such as "addend (a number being added)" or "ones column (the place for ones digits)." Keep the formal term so the student learns correct vocabulary. Define a term only on its first use in the response, do not define ordinary words, and do not overload sentences with parentheses. Never infer identity, ability, diagnosis, or grade from the upload.';
+        $payload = [
+            'model' => 'gpt-5.6-luna',
+            'store' => false,
+            'safety_identifier' => hash('sha256', wp_salt('auth') . (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown')),
+            'instructions' => $instructions,
+            'input' => [[
+                'role' => 'user',
+                'content' => [
+                    $file_input,
+                    ['type' => 'input_text', 'text' => "The student says they tried:\n" . $attempt]
+                ]
+            ]],
+            'text' => ['format' => [
+                'type' => 'json_schema',
+                'name' => 'mathbinder_assignment_feedback',
+                'strict' => true,
+                'schema' => $this->assignment_feedback_schema()
+            ]]
+        ];
+
+        $response = wp_remote_post('https://api.openai.com/v1/responses', [
+            'timeout' => 75,
+            'headers' => [
+                'Authorization' => 'Bearer ' . trim((string) MATHBINDER_OPENAI_API_KEY),
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($payload)
+        ]);
+        if (is_wp_error($response)) wp_send_json_error(['message' => 'The helper could not connect. Please try again.'], 502);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        if (wp_remote_retrieve_response_code($response) >= 300) {
+            wp_send_json_error(['message' => 'The AI service could not complete this request.'], 502);
+        }
+        $text = '';
+        foreach (($body['output'] ?? []) as $output) {
+            foreach (($output['content'] ?? []) as $item) {
+                if (($item['type'] ?? '') === 'output_text') $text .= (string) ($item['text'] ?? '');
+            }
+        }
+        $feedback = json_decode($text, true);
+        if (!is_array($feedback)) wp_send_json_error(['message' => 'The feedback could not be displayed. Please try again.'], 502);
+        wp_send_json_success(['feedback' => $feedback]);
+    }
+
+    public function handle_contact_submit() {
+        $return_url = $this->public_page_url('contact');
+        if (!isset($_POST['mb_contact_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['mb_contact_nonce'])), 'mb_contact_submit')) {
+            wp_safe_redirect(add_query_arg('mb_contact', 'error', $return_url)); exit;
+        }
+        if (!empty($_POST['website'])) {
+            wp_safe_redirect(add_query_arg('mb_contact', 'success', $return_url)); exit;
+        }
+
+        $name = isset($_POST['mb_name']) ? sanitize_text_field(wp_unslash($_POST['mb_name'])) : '';
+        $email = isset($_POST['mb_email']) ? sanitize_email(wp_unslash($_POST['mb_email'])) : '';
+        $role = isset($_POST['mb_role']) ? sanitize_text_field(wp_unslash($_POST['mb_role'])) : '';
+        $subject = isset($_POST['mb_subject']) ? sanitize_text_field(wp_unslash($_POST['mb_subject'])) : '';
+        $message = isset($_POST['mb_message']) ? sanitize_textarea_field(wp_unslash($_POST['mb_message'])) : '';
+
+        if ($name === '' || !is_email($email) || $subject === '' || $message === '') {
+            wp_safe_redirect(add_query_arg('mb_contact', 'error', $return_url)); exit;
+        }
+
+        $recipient = sanitize_email(get_option('admin_email'));
+        $mail_subject = '[MathBinder] ' . $subject;
+        $mail_body = "Name: {$name}\nEmail: {$email}\nRole: {$role}\n\nMessage:\n{$message}";
+        $headers = ['Reply-To: ' . $name . ' <' . $email . '>'];
+        $sent = wp_mail($recipient, $mail_subject, $mail_body, $headers);
+        wp_safe_redirect(add_query_arg('mb_contact', $sent ? 'success' : 'error', $return_url));
+        exit;
+    }
+
 
 
     public function body_classes($classes) {
@@ -3116,6 +4525,19 @@ final class MathBinder_Core {
         }
         if (is_page('your-binder')) {
             $classes[] = 'mb-binder-collection-page';
+        }
+        if (is_page('evidence-folder')) {
+            $classes[] = 'mb-binder-collection-page';
+            $classes[] = 'mb-evidence-folder-page';
+        }
+        if (is_page() && get_post_meta(get_queried_object_id(), '_mb_managed_public_page', true) === '1') {
+            $classes[] = 'mb-public-content-page';
+        }
+        if (is_page(['assignment-helper', 'ai-assignment-helper'])) {
+            $classes[] = 'mb-assignment-helper-page';
+        }
+        if (is_page(['interactive-notebook', 'my-interactive-notebook'])) {
+            $classes[] = 'mb-interactive-notebook-page';
         }
         return $classes;
     }
@@ -3147,6 +4569,7 @@ final class MathBinder_Core {
         }
 
         $this->ensure_section_pages();
+        $this->ensure_public_pages();
 
         $progress_page = get_page_by_path('my-mathbinder', OBJECT, 'page');
         if ($progress_page) {
@@ -3172,7 +4595,7 @@ final class MathBinder_Core {
         if ($collection_page) {
             wp_update_post([
                 'ID' => $collection_page->ID,
-                'post_title' => 'Your Binder',
+                'post_title' => 'My MathBinder',
                 'post_name' => 'your-binder',
                 'post_content' => '[mathbinder_collection]',
                 'post_status' => 'publish'
@@ -3181,9 +4604,28 @@ final class MathBinder_Core {
             wp_insert_post([
                 'post_type' => 'page',
                 'post_status' => 'publish',
-                'post_title' => 'Your Binder',
+                'post_title' => 'My MathBinder',
                 'post_name' => 'your-binder',
                 'post_content' => '[mathbinder_collection]'
+            ]);
+        }
+
+        $evidence_page = get_page_by_path('evidence-folder', OBJECT, 'page');
+        if ($evidence_page) {
+            wp_update_post([
+                'ID' => $evidence_page->ID,
+                'post_title' => 'Evidence Folder',
+                'post_name' => 'evidence-folder',
+                'post_content' => '[mathbinder_evidence_folder]',
+                'post_status' => 'publish'
+            ]);
+        } else {
+            wp_insert_post([
+                'post_type' => 'page',
+                'post_status' => 'publish',
+                'post_title' => 'Evidence Folder',
+                'post_name' => 'evidence-folder',
+                'post_content' => '[mathbinder_evidence_folder]'
             ]);
         }
 
@@ -3397,6 +4839,13 @@ final class MathBinder_Core {
             );
         }
 
+        $this->complete_number_system_lessons();
+        $this->complete_ratio_lessons();
+        $this->complete_algebraic_expression_lessons();
+        $this->complete_solving_graphing_equations_lessons();
+        $this->complete_inequalities_triangles_transformations_lessons();
+        $this->complete_volume_area_probability_statistics_lessons();
+
         update_option('mathbinder_core_version', self::VERSION);
         set_transient('mb_activation_notice_v10', 1, 120);
     }
@@ -3473,6 +4922,7 @@ final class MathBinder_Core {
         }
 
         $this->ensure_section_pages();
+        $this->ensure_public_pages();
 
         update_option('mathbinder_core_version', self::VERSION);
         set_transient('mb_activation_notice_v3', 1, 60);

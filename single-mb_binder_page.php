@@ -13,13 +13,51 @@ while (have_posts()): the_post();
     $section = ($terms && !is_wp_error($terms)) ? $terms[0] : null;
     $previous = $plugin->get_adjacent_topic($id, 'previous');
     $next = $plugin->get_adjacent_topic($id, 'next');
+    $section_url = $section ? get_term_link($section) : home_url('/binder-topics/');
+    if (is_wp_error($section_url)) $section_url = home_url('/binder-topics/');
+
+    // Restrict adult-only lesson content before it is rendered. This is a
+    // server-side boundary: unauthorized users never receive the protected
+    // navigation links or section markup in the page response.
+    $current_user = wp_get_current_user();
+    $current_roles = ($current_user && $current_user->exists()) ? (array) $current_user->roles : [];
+    $is_site_administrator = current_user_can('manage_options');
+    $can_view_parent_help = $is_site_administrator || in_array('mb_parent', $current_roles, true);
+    $can_view_teacher_notes = $is_site_administrator ||
+        in_array('mb_teacher', $current_roles, true) ||
+        in_array('mb_school_admin', $current_roles, true);
 ?>
 <main class="mb-page-wrap">
 <nav id="lesson-top" class="mb-breadcrumbs" aria-label="Breadcrumb">
         <a href="<?php echo esc_url(home_url('/')); ?>">Home</a><span>›</span>
         <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Binder Topics</a><span>›</span>
-        <?php if ($section): ?><span><?php echo esc_html($section->name); ?></span><span>›</span><?php endif; ?>
+        <?php if ($section): ?><a href="<?php echo esc_url($section_url); ?>"><?php echo esc_html($section->name); ?></a><span>›</span><?php endif; ?>
         <span aria-current="page"><?php the_title(); ?></span>
+    </nav>
+
+    <nav class="mb-lesson-sequence-nav mb-lesson-sequence-nav-top" aria-label="Lesson sequence navigation">
+        <div class="mb-sequence-side mb-sequence-previous">
+            <?php if ($previous): ?>
+                <span>Previous Lesson</span>
+                <a rel="prev" href="<?php echo esc_url(get_permalink($previous)); ?>">← <?php echo esc_html($previous->post_title); ?></a>
+            <?php else: ?>
+                <span>Previous Lesson</span>
+                <strong>Start of section</strong>
+            <?php endif; ?>
+        </div>
+        <a class="mb-sequence-section" href="<?php echo esc_url($section_url); ?>">
+            <span>View Section</span>
+            <strong><?php echo esc_html($section ? $section->name : 'Binder Topics'); ?></strong>
+        </a>
+        <div class="mb-sequence-side mb-sequence-next">
+            <?php if ($next): ?>
+                <span>Next Lesson</span>
+                <a rel="next" href="<?php echo esc_url(get_permalink($next)); ?>"><?php echo esc_html($next->post_title); ?> →</a>
+            <?php else: ?>
+                <span>Next Lesson</span>
+                <strong>End of section</strong>
+            <?php endif; ?>
+        </div>
     </nav>
 
     <header class="mb-hero">
@@ -99,11 +137,11 @@ while (have_posts()): the_post();
         <a href="#teach" data-section-tab="teach">Learn It</a>
         <a href="#watch" data-section-tab="watch">Watch It</a>
         <a href="#practice" data-section-tab="practice">Practice It</a>
-        <a href="#binder-pages" data-section-tab="binder-pages">Add to Your Binder</a>
+        <a href="#binder-pages" data-section-tab="binder-pages">Add to My Binder</a>
         <a href="#workbook" data-section-tab="workbook">My Math Journal</a>
         <a href="#master" data-section-tab="master">Mastery Check</a>
-        <a href="#parent-help" data-section-tab="parent-help">Parent Help</a>
-        <a href="#teacher-notes" data-section-tab="teacher-notes">Teacher Notes</a>
+        <?php if ($can_view_parent_help): ?><a href="#parent-help" data-section-tab="parent-help">Parent Help</a><?php endif; ?>
+        <?php if ($can_view_teacher_notes): ?><a href="#teacher-notes" data-section-tab="teacher-notes">Teacher Notes</a><?php endif; ?>
     </nav>
 
     <section id="teach" class="mb-section mb-gold-learn">
@@ -240,7 +278,10 @@ while (have_posts()): the_post();
                         <div class="mb-featured-video" data-featured-video>
                             <?php
                             $url = $featured['url'];
-                            $embed = wp_oembed_get($url);
+                            $youtube_embed = $plugin->youtube_embed_url($url);
+                            $embed = $youtube_embed
+                                ? '<iframe src="' . esc_url($youtube_embed) . '" title="' . esc_attr($featured['title']) . '" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>'
+                                : wp_oembed_get($url);
                             echo $embed ? $embed : '<a href="' . esc_url($url) . '" target="_blank" rel="noopener">Open video</a>';
                             ?>
                         </div>
@@ -253,7 +294,10 @@ while (have_posts()): the_post();
                         <?php if (count($videos) > 1): ?>
                             <div class="mb-video-playlist">
                                 <?php foreach ($videos as $index => $video): ?>
-                                    <a href="<?php echo esc_url($video['url']); ?>" target="_blank" rel="noopener" class="<?php echo $index === 0 ? 'is-current' : ''; ?>">
+                                    <a href="<?php echo esc_url($video['url']); ?>"
+                                       data-video-embed="<?php echo esc_attr($plugin->youtube_embed_url($video['url'])); ?>"
+                                       data-video-title="<?php echo esc_attr($video['title']); ?>"
+                                       class="<?php echo $index === 0 ? 'is-current' : ''; ?>">
                                         <span><?php echo esc_html($index + 1); ?></span>
                                         <strong><?php echo esc_html($video['title']); ?></strong>
                                     </a>
@@ -424,7 +468,7 @@ while (have_posts()): the_post();
                 <div class="mb-binder-collection-summary">
                     <span>My Binder</span>
                     <strong data-binder-lesson-count>0</strong>
-                    <small>Lessons in My Binder</small>
+                    <small>Saved Items in My Binder</small>
                     <div class="mb-mini-binder-progress"><span data-binder-progress-fill style="width:0%"></span></div>
                     <em data-binder-progress-label>Start your collection</em>
                 </div>
@@ -437,6 +481,20 @@ while (have_posts()): the_post();
                 </div>
 
                 <div class="mb-binder-resource-grid">
+                    <?php if (!$meta('printable_pdf') && !$meta('interactive_version') && !$meta('answer_key')): ?>
+                    <article class="mb-binder-resource-card mb-resource-notes mb-available-printables">
+                        <div class="mb-resource-icon" aria-hidden="true">📄</div>
+                        <div class="mb-resource-copy">
+                            <span>Available Now</span>
+                            <h3>Interactive Notebook Printables</h3>
+                            <p>Choose any notebook page below and select <strong>Print Blank Copy</strong> to complete it by hand.</p>
+                            <ul class="mb-resource-preview"><li>Lesson-specific pages</li><li>Clean print layout</li><li>Add to a physical binder</li></ul>
+                        </div>
+                        <a href="#interactive-notebook-pages">Choose a Printable ↓</a>
+                    </article>
+                    <?php endif; ?>
+
+                    <?php if ($meta('printable_pdf')): ?>
                     <article class="mb-binder-resource-card mb-resource-notes" data-resource-card="notes">
                         <div class="mb-resource-icon" aria-hidden="true">📄</div>
                         <div class="mb-resource-copy">
@@ -445,13 +503,11 @@ while (have_posts()): the_post();
                             <p>Guided notes that follow this lesson and are ready to print and place in your binder.</p>
                             <ul class="mb-resource-preview"><li>Vocabulary</li><li>Worked examples</li><li>Guided notes</li></ul>
                         </div>
-                        <?php if ($meta('printable_pdf')): ?>
-                            <a href="<?php echo esc_url($meta('printable_pdf')); ?>" target="_blank" rel="noopener" data-resource-action="notes">Download PDF →</a>
-                        <?php else: ?>
-                            <span class="mb-resource-status">Coming Soon</span>
-                        <?php endif; ?>
+                        <a href="<?php echo esc_url($meta('printable_pdf')); ?>" target="_blank" rel="noopener" data-resource-action="notes">Download PDF →</a>
                     </article>
+                    <?php endif; ?>
 
+                    <?php if ($meta('interactive_version')): ?>
                     <article class="mb-binder-resource-card mb-resource-practice" data-resource-card="practice">
                         <div class="mb-resource-icon" aria-hidden="true">✏️</div>
                         <div class="mb-resource-copy">
@@ -460,24 +516,11 @@ while (have_posts()): the_post();
                             <p>Guided and independent practice pages for mastering today’s lesson.</p>
                             <ul class="mb-resource-preview"><li>Guided practice</li><li>Independent practice</li><li>Challenge question</li></ul>
                         </div>
-                        <?php if ($meta('interactive_version')): ?>
-                            <a href="<?php echo esc_url($meta('interactive_version')); ?>" target="_blank" rel="noopener" data-resource-action="practice">Open Practice →</a>
-                        <?php else: ?>
-                            <span class="mb-resource-status">Coming Soon</span>
-                        <?php endif; ?>
+                        <a href="<?php echo esc_url($meta('interactive_version')); ?>" target="_blank" rel="noopener" data-resource-action="practice">Open Practice →</a>
                     </article>
+                    <?php endif; ?>
 
-                    <article class="mb-binder-resource-card mb-resource-challenge" data-resource-card="challenge">
-                        <div class="mb-resource-icon" aria-hidden="true">🧩</div>
-                        <div class="mb-resource-copy">
-                            <span>Extension</span>
-                            <h3>Challenge Problems</h3>
-                            <p>Stretch your thinking with higher-level questions, puzzles, and enrichment activities.</p>
-                            <ul class="mb-resource-preview"><li>Extension problems</li><li>Math puzzles</li><li>Enrichment</li></ul>
-                        </div>
-                        <span class="mb-resource-status">Coming Soon</span>
-                    </article>
-
+                    <?php if ($meta('answer_key')): ?>
                     <article class="mb-binder-resource-card mb-resource-support" data-resource-card="support">
                         <div class="mb-resource-icon" aria-hidden="true">👨‍🏫</div>
                         <div class="mb-resource-copy">
@@ -486,14 +529,13 @@ while (have_posts()): the_post();
                             <p>Answer keys, teaching tips, intervention ideas, extensions, and discussion prompts.</p>
                             <ul class="mb-resource-preview"><li>Answer key</li><li>Teaching tips</li><li>Discussion prompts</li></ul>
                         </div>
-                        <?php if ($meta('answer_key')): ?>
-                            <a href="<?php echo esc_url($meta('answer_key')); ?>" target="_blank" rel="noopener" data-resource-action="support">View Resources →</a>
-                        <?php else: ?>
-                            <span class="mb-resource-status">Coming Soon</span>
-                        <?php endif; ?>
+                        <a href="<?php echo esc_url($meta('answer_key')); ?>" target="_blank" rel="noopener" data-resource-action="support">View Resources →</a>
                     </article>
+                    <?php endif; ?>
                 </div>
             </section>
+
+            <?php echo $plugin->render_lesson_notebook_tools($id, get_the_title(), $section ? $section->name : ''); ?>
 
             <div class="mb-binder-dashboard-grid">
                 <section class="mb-binder-subsection mb-recent-binder-items">
@@ -501,7 +543,7 @@ while (have_posts()): the_post();
                         <div><span>Your Collection</span><h3>Recently Added</h3></div>
                     </div>
                     <div class="mb-recent-binder-list" data-recent-binder-list>
-                        <div class="mb-binder-empty"><strong>Your saved lessons will appear here.</strong><span>Build a binder you can use all year.</span></div>
+                        <div class="mb-binder-empty"><strong>Your saved items will appear here.</strong><span>Build a binder you can use all year.</span></div>
                     </div>
                 </section>
 
@@ -513,7 +555,7 @@ while (have_posts()): the_post();
                         <div class="mb-preview-cover">
                             <strong>MathBinder</strong>
                             <small>Find It. Learn It. Master It.</small>
-                            <span data-preview-count>0 lessons</span>
+                            <span data-preview-count>0 saved items</span>
                         </div>
                         <div class="mb-preview-tabs">
                             <span>Number System</span><span>Ratios</span><span>Algebra</span><span>Geometry</span>
@@ -611,6 +653,7 @@ while (have_posts()): the_post();
             </div>
 
             <div class="mb-journal-toolbar">
+                <button type="button" class="mb-add-journal-to-binder">Add to My Binder</button>
                 <button type="button" class="mb-print-journal">Print My Journal</button>
                 <button type="button" class="mb-download-notes">Download Journal</button>
                 <button type="button" class="mb-clear-journal">Clear Journal</button>
@@ -827,6 +870,7 @@ while (have_posts()): the_post();
         </div>
     </section>
 
+    <?php if ($can_view_parent_help): ?>
     <section id="parent-help" class="mb-section mb-parent mb-gold-parent"
              data-parent-title="<?php echo esc_attr(get_the_title()); ?>">
         <?php echo $plugin->section_toggle("parent-help", "Parent Help", false); ?>
@@ -912,19 +956,20 @@ while (have_posts()): the_post();
                     <h3>Celebrate the explanation, not just the answer</h3>
                     <p>When students explain their reasoning, they strengthen understanding and confidence.</p>
                 </div>
-                <a href="#teacher-notes" data-parent-go-teacher>View Teacher Notes →</a>
+                <?php if ($can_view_teacher_notes): ?><a href="#teacher-notes" data-parent-go-teacher>View Teacher Notes →</a><?php endif; ?>
             </section>
         </div>
     </section>
+    <?php endif; ?>
 
 
-    <?php if (
+    <?php if ($can_view_teacher_notes && (
         $meta('teacher_objectives') || $meta('teacher_pacing') || $meta('teacher_materials') ||
         $meta('teacher_misconceptions') || $meta('teacher_differentiation') ||
         $meta('teacher_small_group') || $meta('teacher_formative') ||
         $meta('teacher_connections') || $meta('teacher_extensions') ||
         $meta('teacher_notes') || $meta('standards')
-    ): ?>
+    )): ?>
         <section id="teacher-notes" class="mb-section mb-teacher mb-gold-teacher">
             <?php echo $plugin->section_toggle("teacher-notes", "Teacher Notes", false); ?>
             <div id="teacher-notes-content" class="mb-collapsible-content">
@@ -1091,13 +1136,28 @@ while (have_posts()): the_post();
         </div>
     </section>
 
-    <nav class="mb-topic-nav" aria-label="Topic navigation">
-        <div>
-            <?php if ($previous): ?><span>Previous</span><a href="<?php echo esc_url(get_permalink($previous)); ?>">← <?php echo esc_html($previous->post_title); ?></a><?php endif; ?>
+    <nav class="mb-lesson-sequence-nav mb-lesson-sequence-nav-bottom" aria-label="Lesson sequence navigation">
+        <div class="mb-sequence-side mb-sequence-previous">
+            <?php if ($previous): ?>
+                <span>Previous Lesson</span>
+                <a rel="prev" href="<?php echo esc_url(get_permalink($previous)); ?>">← <?php echo esc_html($previous->post_title); ?></a>
+            <?php else: ?>
+                <span>Previous Lesson</span>
+                <strong>Start of section</strong>
+            <?php endif; ?>
         </div>
-        <a class="mb-section-home" href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Binder Topics</a>
-        <div class="mb-topic-next">
-            <?php if ($next): ?><span>Next</span><a href="<?php echo esc_url(get_permalink($next)); ?>"><?php echo esc_html($next->post_title); ?> →</a><?php endif; ?>
+        <a class="mb-sequence-section" href="<?php echo esc_url($section_url); ?>">
+            <span>View Section</span>
+            <strong><?php echo esc_html($section ? $section->name : 'Binder Topics'); ?></strong>
+        </a>
+        <div class="mb-sequence-side mb-sequence-next">
+            <?php if ($next): ?>
+                <span>Next Lesson</span>
+                <a rel="next" href="<?php echo esc_url(get_permalink($next)); ?>"><?php echo esc_html($next->post_title); ?> →</a>
+            <?php else: ?>
+                <span>Next Lesson</span>
+                <strong>End of section</strong>
+            <?php endif; ?>
         </div>
     </nav>
 </main>

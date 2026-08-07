@@ -46,18 +46,6 @@ foreach ($published_pages as $page) {
         <?php endif; ?>
     </header>
 
-    <section class="mb-section-progress">
-        <div>
-            <span>Published Binder Pages</span>
-            <strong><?php echo esc_html(count($published_pages)); ?></strong>
-        </div>
-        <div>
-            <span>Planned Topics</span>
-            <strong><?php echo esc_html(count($planned['topics'])); ?></strong>
-        </div>
-        <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Back to Binder Topics</a>
-    </section>
-
     <div class="mb-chapter-page-grid">
         <?php if (!empty($planned['topics'])): ?>
             <?php foreach ($planned['topics'] as $index => $topic):

@@ -56,6 +56,441 @@
     });
 })();
 
+/* MathBinder 27.6.1 — My MathBinder dashboard */
+(function(){
+    const root = document.querySelector('[data-my-mathbinder]');
+    if (!root) return;
+    const KEY = 'mathbinder_saved_items_v2';
+    const requestedFilter = new URLSearchParams(window.location.search).get('mb_filter');
+    let filter = ['all','lesson','notebook','journal','notes','reference','practice'].indexOf(requestedFilter) >= 0 ? requestedFilter : 'all';
+    let query = '';
+    function read(key, fallback){ try{const value=JSON.parse(localStorage.getItem(key)||'');return value==null?fallback:value}catch(e){return fallback} }
+    function write(items){ try{localStorage.setItem(KEY,JSON.stringify(items))}catch(e){} }
+    function safe(value){ return String(value||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]}) }
+    function allItems(){
+        const current = read(KEY,[]);
+        const items = Array.isArray(current) ? current.slice() : [];
+        const seen = new Set(items.map(function(i){return i.uid}));
+        const lessons = read('mathbinder_lesson_collection',[]);
+        if(Array.isArray(lessons))lessons.forEach(function(item){
+            const id='lesson:'+item.postId;
+            if(!seen.has(id))items.push({uid:id,kind:'lesson',title:item.title,lessonTitle:item.title,sectionTitle:item.sectionTitle,url:item.url,lessonUrl:item.url,addedAt:Date.parse(item.added)||0});
+        });
+        const resources = read('mathbinder_resource_collection',[]);
+        if(Array.isArray(resources))resources.forEach(function(item){
+            const id='resource:'+item.postId+':'+item.type;
+            if(!seen.has(id))items.push({uid:id,kind:item.type==='notes'?'notes':item.type==='practice'?'practice':'reference',title:(item.title||'Binder Page')+' — '+item.type,lessonTitle:item.title,sectionTitle:item.section||'Binder Section',addedAt:Date.parse(item.collected)||0});
+        });
+        return items.sort(function(a,b){return Number(b.updatedAt||b.addedAt||0)-Number(a.updatedAt||a.addedAt||0)});
+    }
+    function title(item){ return item.activity&&item.activity.title ? item.activity.title : item.title||item.lessonTitle||'Saved item' }
+    function typeLabel(item){ return {lesson:'Lesson',notebook:'Interactive Notebook',journal:'Math Journal',notes:'My Math Notes',reference:'Reference Page',practice:'Practice'}[item.kind]||'Saved Item' }
+    function isEditable(item){ return item.kind==='notebook'||item.kind==='journal' }
+    function matches(item){
+        const text=(title(item)+' '+(item.sectionTitle||'')+' '+typeLabel(item)).toLowerCase();
+        return (filter==='all'||item.kind===filter) && (!query||text.indexOf(query)>=0);
+    }
+    function card(item, recent){
+        const when=item.addedAt?new Date(item.addedAt).toLocaleDateString():'Saved';
+        return '<article class="mb-my-binder-card" data-saved-uid="'+safe(item.uid)+'">'+
+            '<span class="mb-my-binder-type">'+safe(typeLabel(item))+'</span><h3>'+safe(title(item))+'</h3>'+
+            '<p>'+safe(item.sectionTitle||'Binder Section')+'</p><small>Added '+safe(when)+'</small>'+
+            '<div class="mb-my-binder-actions">'+
+            (isEditable(item)?'<button type="button" data-open-saved>Open & Edit</button>':'<a href="'+safe(item.lessonUrl||item.url||'#')+'">Open</a>')+
+            '<button type="button" data-print-saved-item>Print</button><button type="button" class="is-remove" data-remove-saved>Remove</button></div>'+
+            (isEditable(item)?'<div class="mb-saved-editor" data-saved-editor hidden></div>':'')+'</article>';
+    }
+    function render(){
+        const all=allItems(), shown=all.filter(matches);
+        root.querySelectorAll('[data-mb-collected-total]').forEach(function(n){n.textContent=all.length});
+        const recent=root.querySelector('[data-my-binder-recent]');
+        recent.innerHTML=all.slice(0,3).map(function(i){return card(i,true)}).join('');
+        const sections={};
+        shown.forEach(function(i){const s=i.sectionTitle||'Other Saved Items';(sections[s]=sections[s]||[]).push(i)});
+        const host=root.querySelector('[data-my-binder-sections]');
+        host.innerHTML=Object.keys(sections).map(function(section){
+            return '<section class="mb-my-binder-section"><div class="mb-my-binder-section-title"><h3>'+safe(section)+'</h3><span>'+sections[section].length+' saved</span></div><div class="mb-my-binder-card-grid">'+sections[section].map(function(i){return card(i,false)}).join('')+'</div></section>';
+        }).join('');
+        root.querySelector('[data-my-binder-empty]').hidden=all.length>0;
+        if(all.length&&shown.length===0)host.innerHTML='<div class="mb-my-binder-no-results">No saved items match this search or filter.</div>';
+    }
+    function editor(item, host){
+        const activity=item.activity||{}, fields=String(activity.fields||'My response').split('|'), values=Array.isArray(item.values)?item.values:[];
+        host.innerHTML='<div class="mb-saved-editor-heading"><div><span>'+safe(activity.type||'Interactive Notebook')+'</span><h4>'+safe(title(item))+'</h4></div><small>Saved automatically</small></div>'+
+            (activity.prompt?'<div class="mb-binder-entry-prompts">'+String(activity.prompt).split('|').map(function(p){return'<p>'+safe(p)+'</p>'}).join('')+'</div>':'')+
+            fields.map(function(label,index){return'<div class="mb-dashboard-response"><label>'+safe(label)+'</label><div class="mb-mini-tools"><button type="button" data-mini-symbols>Math Symbols</button><button type="button" data-mini-emojis>Emoji</button><span hidden data-mini-symbol-palette>'+['×','÷','≤','≥','≠','π','√','²','³','°','½'].map(function(t){return'<button type="button" data-mini-token="'+t+'">'+t+'</button>'}).join('')+'</span><span hidden data-mini-emoji-palette>'+['😀','🤔','💡','✅'].map(function(t){return'<button type="button" data-mini-token="'+t+'">'+t+'</button>'}).join('')+'</span></div><textarea data-dashboard-field="'+index+'">'+safe(values[index]||'')+'</textarea>'+(item.drawings&&item.drawings[index]?'<img class="mb-saved-drawing" src="'+item.drawings[index]+'" alt="Saved drawing">':'')+'</div>'}).join('')+
+            '<div class="mb-binder-entry-actions"><a class="mb-button-secondary" href="'+safe(item.lessonUrl||'#')+'#binder-pages">Return to Lesson</a><button type="button" class="mb-button-secondary" data-close-saved>Close</button></div>';
+        host.hidden=false;
+    }
+    root.addEventListener('input',function(event){
+        if(event.target.matches('[data-my-binder-search]')){query=event.target.value.trim().toLowerCase();render();return}
+        if(event.target.matches('[data-dashboard-field]')){
+            const wrap=event.target.closest('[data-saved-uid]'),items=read(KEY,[]),item=items.find(function(i){return i.uid===wrap.dataset.savedUid});
+            if(item){item.values=item.values||[];item.values[Number(event.target.dataset.dashboardField)]=event.target.value;item.updatedAt=Date.now();write(items)}
+        }
+    });
+    root.addEventListener('click',function(event){
+        const f=event.target.closest('[data-binder-filter]');
+        if(f){filter=f.dataset.binderFilter;root.querySelectorAll('[data-binder-filter]').forEach(function(b){b.classList.toggle('is-active',b===f)});render();return}
+        const wrap=event.target.closest('[data-saved-uid]'); if(!wrap)return;
+        const item=allItems().find(function(i){return i.uid===wrap.dataset.savedUid}); if(!item)return;
+        if(event.target.closest('[data-remove-saved]')){
+            let items=read(KEY,[]).filter(function(i){return i.uid!==item.uid});write(items);
+            if(item.kind==='lesson'){localStorage.setItem('mathbinder_lesson_collection',JSON.stringify(read('mathbinder_lesson_collection',[]).filter(function(i){return 'lesson:'+i.postId!==item.uid})))}
+            if(String(item.uid).indexOf('resource:')===0){localStorage.setItem('mathbinder_resource_collection',JSON.stringify(read('mathbinder_resource_collection',[]).filter(function(i){return 'resource:'+i.postId+':'+i.type!==item.uid})))}
+            render();return;
+        }
+        if(event.target.closest('[data-open-saved]')){
+            const host=wrap.querySelector('[data-saved-editor]');
+            if(host){
+                editor(item,host);
+                host.scrollIntoView({behavior:'smooth',block:'nearest'});
+            }
+            return;
+        }
+        if(event.target.closest('[data-close-saved]')){event.target.closest('[data-saved-editor]').hidden=true;return}
+        const symbolsButton=event.target.closest('[data-mini-symbols]');
+        if(symbolsButton){const tools=symbolsButton.closest('.mb-mini-tools'),symbols=tools.querySelector('[data-mini-symbol-palette]'),emojis=tools.querySelector('[data-mini-emoji-palette]');symbols.hidden=!symbols.hidden;emojis.hidden=true;symbolsButton.classList.toggle('is-active',!symbols.hidden);tools.querySelector('[data-mini-emojis]').classList.remove('is-active');return}
+        const emojiButton=event.target.closest('[data-mini-emojis]');
+        if(emojiButton){const tools=emojiButton.closest('.mb-mini-tools'),symbols=tools.querySelector('[data-mini-symbol-palette]'),emojis=tools.querySelector('[data-mini-emoji-palette]');emojis.hidden=!emojis.hidden;symbols.hidden=true;emojiButton.classList.toggle('is-active',!emojis.hidden);tools.querySelector('[data-mini-symbols]').classList.remove('is-active');return}
+        const token=event.target.closest('[data-mini-token]');
+        if(token){const area=token.closest('.mb-dashboard-response').querySelector('textarea'),start=area.selectionStart||area.value.length;area.value=area.value.slice(0,start)+token.dataset.miniToken+area.value.slice(area.selectionEnd||start);area.dispatchEvent(new Event('input',{bubbles:true}));area.focus();return}
+        if(event.target.closest('[data-print-saved-item]')){const popup=window.open('','_blank','width=850,height=750');if(popup){popup.document.write('<!doctype html><html><head><title>'+safe(title(item))+'</title><style>body{font-family:Arial;max-width:760px;margin:40px auto;color:#263238}h1{color:#54269a}section{margin:24px 0;padding:15px;border:1px solid #bbb}img{max-width:100%}</style></head><body><h1>'+safe(title(item))+'</h1><p>'+safe(item.sectionTitle||'')+'</p>'+(item.activity?String(item.activity.fields||'Response').split('|').map(function(label,index){return'<section><h3>'+safe(label)+'</h3><p>'+safe((item.values||[])[index]||'')+'</p>'+(item.drawings&&item.drawings[index]?'<img src="'+item.drawings[index]+'">':'')+'</section>'}).join(''):'<p>Open this saved item in MathBinder.</p>')+'<script>window.onload=function(){window.print()}</script></body></html>');popup.document.close()}return}
+    });
+    root.querySelectorAll('[data-binder-filter]').forEach(function(button){
+        button.classList.toggle('is-active', button.dataset.binderFilter === filter);
+    });
+    render();
+})();
+
+/* MathBinder 30.2.2 — dedicated Evidence Folder */
+(function(){
+    document.addEventListener('DOMContentLoaded', function(){
+        const root = document.querySelector('[data-mb-evidence-folder]');
+        if (!root) return;
+        const activity = window.MathBinderStudentActivity ? window.MathBinderStudentActivity.read() : {lessons:{}};
+        const lessons = activity && activity.lessons ? activity.lessons : {};
+        let total = 0;
+        root.querySelectorAll('[data-evidence-lesson]').forEach(function(card){
+            const item = lessons[String(card.dataset.postId)] || {};
+            const visible = !!item.completed;
+            card.hidden = !visible;
+            if (visible) total++;
+        });
+        const count = root.querySelector('[data-mb-evidence-total]');
+        const empty = root.querySelector('[data-mb-evidence-empty]');
+        if (count) count.textContent = total;
+        if (empty) empty.hidden = total > 0;
+    });
+})();
+
+/* MathBinder 27.6.1 — shared My MathBinder + visible response tools */
+(function(){
+    const root = document.querySelector('[data-mb-notebook]');
+    if (!root) return;
+    const lessonKey = root.dataset.mbNotebookLesson || 'legacy';
+    const storageKey = 'mathbinder_saved_items_v2';
+    const legacyKey = 'mathbinder_interactive_notebook_v1_' + lessonKey;
+    const library = {};
+    root.querySelectorAll('.mb-notebook-card').forEach(function(card){
+        try { library[card.dataset.notebookId] = JSON.parse(card.querySelector('.mb-notebook-data').textContent); } catch (error) {}
+    });
+
+    function readBinder(){
+        try {
+            const value = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            return Array.isArray(value) ? value : [];
+        } catch (error) { return []; }
+    }
+    function writeBinder(items){
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(items));
+            window.dispatchEvent(new CustomEvent('mathbinder:saved-items-changed'));
+        } catch (error) {}
+    }
+    function safe(value){
+        return String(value || '').replace(/[&<>"']/g, function(character){
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character];
+        });
+    }
+    function getActivity(id){
+        return library[id] || null;
+    }
+    function migrateLegacy(){
+        let all = readBinder();
+        if (all.some(function(item){ return String(item.lessonId) === String(lessonKey) && item.kind === 'notebook'; })) return;
+        try {
+            const old = JSON.parse(localStorage.getItem(legacyKey) || '[]');
+            if (!Array.isArray(old) || !old.length) return;
+            old.forEach(function(item){
+                const activity = getActivity(item.id);
+                if (!activity) return;
+                all.push({
+                    uid:'notebook:' + lessonKey + ':' + item.id,
+                    kind:'notebook',
+                    lessonId:String(lessonKey),
+                    lessonTitle:root.dataset.mbLessonTitle || 'Binder Page',
+                    sectionTitle:root.dataset.mbSectionTitle || 'Binder Section',
+                    lessonUrl:root.dataset.mbLessonUrl || '#',
+                    activity:activity,
+                    values:Array.isArray(item.values) ? item.values : [],
+                    drawings:{},
+                    addedAt:item.addedAt || Date.now(),
+                    updatedAt:Date.now()
+                });
+            });
+            writeBinder(all);
+        } catch (error) {}
+    }
+    function uid(id){ return 'notebook:' + lessonKey + ':' + id; }
+    function currentItems(){
+        return readBinder().filter(function(item){
+            return item.kind === 'notebook' && String(item.lessonId) === String(lessonKey);
+        });
+    }
+    function responseTools(index, calculatorEnabled){
+        return '<div class="mb-response-tools" data-response-tools>' +
+            '<button type="button" class="is-active" data-response-mode="type">Type</button>' +
+            '<button type="button" data-response-mode="draw">Draw</button>' +
+            '<button type="button" data-response-mode="symbols">Math Symbols</button>' +
+            '<button type="button" data-response-mode="emoji">Emoji</button>' +
+            (calculatorEnabled ? '<button type="button" data-response-mode="calculator">Scientific Calculator</button>' : '') +
+            '<div class="mb-symbol-palette" data-symbol-palette hidden>' +
+            ['×','÷','±','≠','≤','≥','≈','π','√','²','³','°','∠','⊥','∥','∞','%','½','¼','¾']
+                .map(function(symbol){ return '<button type="button" data-insert-token="' + symbol + '">' + symbol + '</button>'; }).join('') +
+            '</div><div class="mb-emoji-palette" data-emoji-palette hidden>' +
+            ['😀','🙂','🤔','💡','⭐','✅','❓','👍','🎯','🧠']
+                .map(function(symbol){ return '<button type="button" data-insert-token="' + symbol + '">' + symbol + '</button>'; }).join('') +
+            '</div></div>' +
+            (calculatorEnabled ? '<div class="mb-calculator-panel" data-calculator-panel hidden><iframe title="Desmos Scientific Calculator" loading="lazy" src="https://www.desmos.com/scientific"></iframe></div>' : '') +
+            '<div class="mb-drawing-panel" data-drawing-panel hidden>' +
+            '<div class="mb-drawing-controls"><label>Color <input type="color" value="#293241" data-draw-color></label>' +
+            '<label>Line <input type="range" min="1" max="12" value="3" data-draw-size></label>' +
+            '<button type="button" data-draw-eraser>Eraser</button><button type="button" data-draw-undo>Undo</button>' +
+            '<button type="button" data-draw-clear>Clear</button></div>' +
+            '<canvas data-drawing-canvas data-field-index="' + index + '" width="900" height="260" aria-label="Drawing area"></canvas></div>';
+    }
+    function printActivity(activity, values){
+        if (!activity) return;
+        const popup = window.open('', '_blank', 'width=940,height=850');
+        if (!popup) return;
+        const prompts = String(activity.prompt || '').split('|').map(function(line){ return '<li>' + safe(line) + '</li>'; }).join('');
+        const fields = String(activity.fields || '').split('|').map(function(label, index){
+            const answer = values && values[index] ? '<p class="answer">' + safe(values[index]).replace(/\n/g, '<br>') + '</p>' : '<div class="writing"></div>';
+            return '<section><h3>' + safe(label) + '</h3>' + answer + '</section>';
+        }).join('');
+        popup.document.write('<!doctype html><html><head><title>' + safe(activity.title) + '</title><style>@page{margin:.5in}body{font-family:Arial,sans-serif;color:#27323b;line-height:1.45}header{border-bottom:5px solid #087d82;padding-bottom:12px}h1{margin:4px 0;color:#532890}small{font-weight:bold;color:#087d82;text-transform:uppercase}li{margin:7px 0}.guide{margin:20px 0;padding:16px;border:2px dashed #87999d;border-radius:8px}.guide:before{content:"Cut or fold on dashed guides when your teacher asks.";display:block;margin-bottom:12px;color:#657176;font-size:11px;font-weight:bold}section{margin:18px 0;break-inside:avoid}h3{margin-bottom:7px;color:#532890}.writing{height:95px;background:repeating-linear-gradient(#fff,#fff 27px,#aab7ba 28px)}.answer{min-height:60px;padding:10px;border:1px solid #aab7ba}.name{float:right;border-bottom:1px solid #555;width:220px;height:20px}@media print{button{display:none}}</style></head><body><header><span class="name"></span><small>MathBinder Interactive Notebook • ' + safe(activity.type) + '</small><h1>' + safe(activity.title) + '</h1></header><div class="guide"><ul>' + prompts + '</ul></div>' + fields + '<script>window.onload=function(){window.print();}</script></body></html>');
+        popup.document.close();
+    }
+    function render(){
+        const items = currentItems();
+        const list = root.querySelector('[data-my-binder-list]');
+        const empty = root.querySelector('[data-my-binder-empty]');
+        root.querySelectorAll('[data-mb-binder-count],[data-mb-binder-badge]').forEach(function(node){ node.textContent = items.length; });
+        root.querySelectorAll('.mb-notebook-card').forEach(function(card){
+            const added = items.some(function(item){ return item.uid === uid(card.dataset.notebookId); });
+            card.classList.toggle('is-added', added);
+            const button = card.querySelector('.mb-add-notebook');
+            if (button) button.textContent = added ? 'Added to My Binder' : 'Add to My Binder';
+        });
+        list.innerHTML = '';
+        empty.hidden = items.length > 0;
+        items.forEach(function(item){
+            const activity = item.activity || getActivity(String(item.uid || '').split(':').pop());
+            if (!activity) return;
+            const article = document.createElement('article');
+            article.className = 'mb-binder-entry';
+            article.dataset.binderEntry = item.uid;
+            const prompts = String(activity.prompt).split('|').map(function(line){ return '<p>' + safe(line) + '</p>'; }).join('');
+            const values = Array.isArray(item.values) ? item.values : [];
+            const fields = String(activity.fields).split('|').map(function(label, index){
+                return '<div class="mb-binder-response"><label>' + safe(label) + '</label>' + responseTools(index, !!activity.calculator) +
+                    '<textarea data-binder-field="' + index + '" placeholder="Type here…">' + safe(values[index] || '') + '</textarea></div>';
+            }).join('');
+            article.innerHTML = '<div class="mb-binder-entry-head"><div><span class="mb-notebook-type">' + safe(activity.type) + '</span><h3>' + safe(activity.title) + '</h3><small class="mb-autosave-status">Saved automatically</small></div></div><div class="mb-binder-entry-prompts">' + prompts + '</div><div class="mb-binder-fields">' + fields + '</div><div class="mb-binder-entry-actions"><a class="mb-button" href="' + safe(root.dataset.mbBinderUrl || '/your-binder/') + '">Save and View My MathBinder</a><button type="button" class="mb-button-secondary mb-print-saved">Print It</button><button type="button" class="mb-button-secondary mb-remove-notebook">Remove from Binder</button></div>';
+            list.appendChild(article);
+            Object.keys(item.drawings || {}).forEach(function(fieldIndex){
+                const canvas = article.querySelector('canvas[data-field-index="' + fieldIndex + '"]');
+                if (canvas) restoreCanvas(canvas, item.drawings[fieldIndex]);
+            });
+        });
+    }
+    function showTab(name){
+        root.querySelectorAll('[data-notebook-tab]').forEach(function(button){ button.classList.toggle('is-active', button.dataset.notebookTab === name); });
+        root.querySelectorAll('[data-notebook-panel]').forEach(function(panel){ panel.hidden = panel.dataset.notebookPanel !== name; });
+    }
+    root.addEventListener('click', function(event){
+        const tab = event.target.closest('[data-notebook-tab]');
+        if (tab) { showTab(tab.dataset.notebookTab); return; }
+        const card = event.target.closest('.mb-notebook-card');
+        if (event.target.closest('.mb-add-notebook') && card) {
+            const items = readBinder();
+            const itemUid = uid(card.dataset.notebookId);
+            if (!items.some(function(item){ return item.uid === itemUid; })) {
+                items.unshift({
+                    uid:itemUid, kind:'notebook', lessonId:String(lessonKey),
+                    lessonTitle:root.dataset.mbLessonTitle || 'Binder Page',
+                    sectionTitle:root.dataset.mbSectionTitle || 'Binder Section',
+                    lessonUrl:root.dataset.mbLessonUrl || '#',
+                    activity:getActivity(card.dataset.notebookId), values:[], drawings:{},
+                    addedAt:Date.now(), updatedAt:Date.now()
+                });
+                writeBinder(items);
+            }
+            render();
+            const toast = root.querySelector('[data-mb-binder-toast]');
+            if (toast) {
+                toast.hidden = false;
+                toast.innerHTML = '<strong>' + safe(card.dataset.notebookTitle) + '</strong> was added. <a href="' + safe(root.dataset.mbBinderUrl || '/your-binder/') + '">View My MathBinder</a>';
+                window.setTimeout(function(){ toast.hidden = true; }, 7000);
+            }
+            return;
+        }
+        if (event.target.closest('.mb-print-notebook') && card) { printActivity(getActivity(card.dataset.notebookId), []); return; }
+        const entry = event.target.closest('[data-binder-entry]');
+        if (event.target.closest('.mb-print-saved') && entry) {
+            const item = readBinder().find(function(record){ return record.uid === entry.dataset.binderEntry; });
+            printActivity(item && item.activity, item ? item.values : []);
+            return;
+        }
+        if (event.target.closest('.mb-remove-notebook') && entry) {
+            writeBinder(readBinder().filter(function(item){ return item.uid !== entry.dataset.binderEntry; }));
+            render();
+            return;
+        }
+        const mode = event.target.closest('[data-response-mode]');
+        if (mode) {
+            const response = mode.closest('.mb-binder-response');
+            response.querySelectorAll('[data-response-mode]').forEach(function(button){ button.classList.toggle('is-active', button === mode); });
+            response.querySelector('[data-drawing-panel]').hidden = mode.dataset.responseMode !== 'draw';
+            response.querySelector('[data-symbol-palette]').hidden = mode.dataset.responseMode !== 'symbols';
+            response.querySelector('[data-emoji-palette]').hidden = mode.dataset.responseMode !== 'emoji';
+            const calculator = response.querySelector('[data-calculator-panel]');
+            if (calculator) calculator.hidden = mode.dataset.responseMode !== 'calculator';
+            response.querySelector('textarea').hidden = mode.dataset.responseMode === 'draw' || mode.dataset.responseMode === 'calculator';
+            if (mode.dataset.responseMode === 'draw') setupCanvas(response.querySelector('canvas'));
+            return;
+        }
+        const token = event.target.closest('[data-insert-token]');
+        if (token) {
+            const textarea = token.closest('.mb-binder-response').querySelector('textarea');
+            const start = textarea.selectionStart || textarea.value.length;
+            textarea.value = textarea.value.slice(0,start) + token.dataset.insertToken + textarea.value.slice(textarea.selectionEnd || start);
+            textarea.dispatchEvent(new Event('input',{bubbles:true}));
+            textarea.focus();
+            textarea.selectionStart = textarea.selectionEnd = start + token.dataset.insertToken.length;
+            return;
+        }
+        if (event.target.closest('[data-print-all-notebook]')) { window.print(); }
+    });
+    root.addEventListener('input', function(event){
+        if (!event.target.matches('[data-binder-field]')) return;
+        const entry = event.target.closest('[data-binder-entry]');
+        const items = readBinder();
+        const item = items.find(function(record){ return record.uid === entry.dataset.binderEntry; });
+        if (!item) return;
+        item.values = Array.isArray(item.values) ? item.values : [];
+        item.values[Number(event.target.dataset.binderField)] = event.target.value;
+        item.updatedAt = Date.now();
+        writeBinder(items);
+    });
+    function restoreCanvas(canvas, data){
+        if (!data) return;
+        const image = new Image();
+        image.onload = function(){ canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height); };
+        image.src = data;
+    }
+    function saveCanvas(canvas){
+        const entry = canvas.closest('[data-binder-entry]');
+        const items = readBinder();
+        const item = items.find(function(record){ return record.uid === entry.dataset.binderEntry; });
+        if (!item) return;
+        item.drawings = item.drawings || {};
+        item.drawings[canvas.dataset.fieldIndex] = canvas.toDataURL('image/png');
+        item.updatedAt = Date.now();
+        writeBinder(items);
+    }
+    function setupCanvas(canvas){
+        if (!canvas || canvas.dataset.ready) return;
+        canvas.dataset.ready = '1';
+        const ctx = canvas.getContext('2d');
+        const history = [];
+        let drawing = false;
+        function point(event){
+            const rect = canvas.getBoundingClientRect();
+            const source = event.touches ? event.touches[0] : event;
+            return {x:(source.clientX-rect.left)*(canvas.width/rect.width),y:(source.clientY-rect.top)*(canvas.height/rect.height)};
+        }
+        function start(event){ event.preventDefault(); history.push(canvas.toDataURL()); drawing=true; const p=point(event); ctx.beginPath(); ctx.moveTo(p.x,p.y); }
+        function move(event){ if(!drawing)return; event.preventDefault(); const p=point(event); const panel=canvas.closest('.mb-drawing-panel'); ctx.lineWidth=Number(panel.querySelector('[data-draw-size]').value); ctx.lineCap='round'; ctx.strokeStyle=panel.dataset.eraser==='1'?'#ffffff':panel.querySelector('[data-draw-color]').value; ctx.lineTo(p.x,p.y); ctx.stroke(); }
+        function end(){ if(!drawing)return; drawing=false; saveCanvas(canvas); }
+        canvas.addEventListener('pointerdown',start); canvas.addEventListener('pointermove',move); window.addEventListener('pointerup',end);
+        const panel=canvas.closest('.mb-drawing-panel');
+        panel.querySelector('[data-draw-eraser]').addEventListener('click',function(){ panel.dataset.eraser=panel.dataset.eraser==='1'?'0':'1'; this.classList.toggle('is-active',panel.dataset.eraser==='1'); });
+        panel.querySelector('[data-draw-undo]').addEventListener('click',function(){ const previous=history.pop(); ctx.clearRect(0,0,canvas.width,canvas.height); if(previous)restoreCanvas(canvas,previous); saveCanvas(canvas); });
+        panel.querySelector('[data-draw-clear]').addEventListener('click',function(){ history.push(canvas.toDataURL()); ctx.clearRect(0,0,canvas.width,canvas.height); saveCanvas(canvas); });
+    }
+    migrateLegacy();
+    render();
+})();
+
+
+(function(){
+    const form = document.getElementById('mb-assignment-form');
+    if (!form || typeof MathBinderSearch === 'undefined') return;
+
+    const fileInput = document.getElementById('mb-assignment-file');
+    const status = document.getElementById('mb-assignment-status');
+    const result = document.getElementById('mb-assignment-result');
+    const button = form.querySelector('button[type="submit"]');
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+    form.addEventListener('submit', async function(event){
+        event.preventDefault();
+        const file = fileInput.files && fileInput.files[0];
+        if (!file || !allowed.includes(file.type) || file.size > 8 * 1024 * 1024) {
+            status.textContent = 'Choose a PDF, JPG, PNG, or WEBP file no larger than 8 MB.';
+            status.className = 'mb-assignment-status is-error';
+            return;
+        }
+
+        const data = new FormData(form);
+        data.append('action', 'mb_assignment_feedback');
+        data.append('nonce', MathBinderSearch.assignmentNonce);
+        button.disabled = true;
+        button.textContent = 'Reviewing your work…';
+        status.textContent = 'The helper is looking for the first useful next step.';
+        status.className = 'mb-assignment-status is-working';
+        result.hidden = true;
+
+        try {
+            const response = await fetch(MathBinderSearch.ajaxUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                body: data
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.success) {
+                throw new Error(payload && payload.data && payload.data.message ? payload.data.message : 'The helper could not complete this request.');
+            }
+            const feedback = payload.data.feedback || {};
+            result.querySelectorAll('[data-field]').forEach(function(node){
+                node.textContent = feedback[node.dataset.field] || '';
+            });
+            result.hidden = false;
+            result.scrollIntoView({behavior:'smooth', block:'start'});
+            status.textContent = 'Your coaching feedback is ready. Revise your work before asking for another check.';
+            status.className = 'mb-assignment-status is-success';
+        } catch (error) {
+            status.textContent = error.message || 'The helper could not complete this request.';
+            status.className = 'mb-assignment-status is-error';
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Help me find my next step';
+        }
+    });
+})();
+
 
 (function(){
     const items = document.querySelectorAll('.mb-reveal');
@@ -178,6 +613,7 @@
 
         const d = window.mathbinderFooterData;
         let footer =
+            document.querySelector('#mb-official-site-footer') ||
             document.querySelector('footer.site-footer') ||
             document.querySelector('#colophon') ||
             document.querySelector('.site-footer') ||
@@ -230,11 +666,8 @@
         });
 
         document.querySelectorAll('footer, #colophon, .site-footer').forEach(function(node){
-            if (node === footer || footer.contains(node)) return;
-            const text = (node.textContent || '').toLowerCase();
-            if (text.includes('lorem ipsum') || text.includes('terms & conditions')) {
-                node.remove();
-            }
+            if (node === footer || footer.contains(node) || node.contains(footer)) return;
+            node.remove();
         });
     }
 
@@ -473,10 +906,15 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 
-/* MathBinder 12.2 — sticky horizontal section navigation */
+/* MathBinder 27.1.2 — theme-resistant sticky horizontal section navigation */
 document.addEventListener('DOMContentLoaded', function(){
     const nav = document.querySelector('.mb-sticky-section-nav');
     if (!nav) return;
+
+    const spacer = document.createElement('div');
+    spacer.className = 'mb-sticky-section-nav-spacer';
+    spacer.setAttribute('aria-hidden', 'true');
+    nav.parentNode.insertBefore(spacer, nav);
 
     const tabs = Array.from(nav.querySelectorAll('[data-section-tab]'));
     const sections = tabs
@@ -504,68 +942,273 @@ document.addEventListener('DOMContentLoaded', function(){
         });
     });
 
+    let activeTab = null;
+
     function activate(tab){
         tabs.forEach(function(item){
             item.classList.toggle('is-active', item === tab);
         });
+
+        // Center the active tab only inside the horizontal navigation strip.
+        // Element.scrollIntoView() can also move the page vertically on mobile,
+        // which trapped users below the lesson header and prevented them from
+        // reaching Previous/Next Lesson, progress controls, and At a Glance.
+        if (tab && tab !== activeTab && nav.scrollWidth > nav.clientWidth) {
+            const centeredLeft = tab.offsetLeft - ((nav.clientWidth - tab.offsetWidth) / 2);
+            nav.scrollTo({
+                left: Math.max(0, centeredLeft),
+                behavior: 'smooth'
+            });
+        }
+
+        activeTab = tab || null;
     }
 
     if (sections.length) activate(sections[0].tab);
 
-    if ('IntersectionObserver' in window) {
-        const observer = new IntersectionObserver(function(entries){
-            const visible = entries
-                .filter(function(entry){ return entry.isIntersecting; })
-                .sort(function(a, b){ return a.boundingClientRect.top - b.boundingClientRect.top; });
+    let stickyStart = 0;
+    let stickyLeft = 0;
+    let stickyWidth = 0;
+    let ticking = false;
 
-            if (!visible.length) return;
-
-            const match = sections.find(function(item){
-                return item.section === visible[0].target;
-            });
-
-            if (match) activate(match.tab);
-        }, {
-            rootMargin: '-18% 0px -65% 0px',
-            threshold: 0
-        });
-
-        sections.forEach(function(item){
-            observer.observe(item.section);
-        });
+    function stickyTop(){
+        const value = parseFloat(window.getComputedStyle(nav).top);
+        return Number.isFinite(value) ? value : 0;
     }
-        // Hide while scrolling down on mobile; reveal when scrolling up.
-        let lastScrollY = window.scrollY;
-        let ticking = false;
 
-        function updateMobileNav(){
-            const currentScrollY = window.scrollY;
+    function measure(){
+        nav.classList.remove('is-fixed');
+        nav.style.removeProperty('--mb-sticky-left');
+        nav.style.removeProperty('--mb-sticky-width');
+        spacer.style.height = '0px';
 
-            if (window.innerWidth <= 782) {
-                const scrollingDown = currentScrollY > lastScrollY;
+        const rect = nav.getBoundingClientRect();
+        stickyStart = rect.top + window.scrollY - stickyTop();
+        stickyLeft = rect.left;
+        stickyWidth = rect.width;
+        update();
+    }
 
-                nav.classList.toggle(
-                    'is-scroll-hidden',
-                    scrollingDown && currentScrollY > nav.offsetHeight
-                );
-            } else {
-                nav.classList.remove('is-scroll-hidden');
-            }
+    function update(){
+        const shouldFix = window.scrollY >= stickyStart;
 
-            lastScrollY = Math.max(currentScrollY, 0);
-            ticking = false;
+        if (shouldFix) {
+            nav.style.setProperty('--mb-sticky-left', Math.round(stickyLeft) + 'px');
+            nav.style.setProperty('--mb-sticky-width', Math.round(stickyWidth) + 'px');
+            spacer.style.height = nav.offsetHeight + 'px';
+            nav.classList.add('is-fixed');
+        } else {
+            nav.classList.remove('is-fixed');
+            nav.style.removeProperty('--mb-sticky-left');
+            nav.style.removeProperty('--mb-sticky-width');
+            spacer.style.height = '0px';
         }
 
-        window.addEventListener('scroll', function(){
-            if (!ticking) {
-                window.requestAnimationFrame(updateMobileNav);
-                ticking = true;
-            }
-        }, { passive: true });
+        const marker = stickyTop() + nav.offsetHeight + 24;
+        let current = sections[0];
 
-        window.addEventListener('resize', updateMobileNav);
+        sections.forEach(function(item){
+            if (item.section.getBoundingClientRect().top <= marker) current = item;
+        });
+
+        if (current) activate(current.tab);
+    }
+
+    function requestUpdate(){
+        if (ticking) return;
+        ticking = true;
+        window.requestAnimationFrame(function(){
+            update();
+            ticking = false;
+        });
+    }
+
+    window.addEventListener('scroll', requestUpdate, {passive:true});
+    window.addEventListener('resize', function(){
+        window.clearTimeout(nav._mbResizeTimer);
+        nav._mbResizeTimer = window.setTimeout(measure, 120);
+    });
+    window.addEventListener('load', measure);
+    measure();
 });
 
+
+/* MathBinder 30.3.0 — one honest lesson-activity record for every student view */
+(function(){
+    const KEY = 'mathbinder_student_activity_v1';
+
+    function readJSON(key, fallback){
+        try {
+            const value = JSON.parse(localStorage.getItem(key) || '');
+            return value == null ? fallback : value;
+        } catch (error) {
+            return fallback;
+        }
+    }
+
+    function writeJSON(key, value){
+        try { localStorage.setItem(key, JSON.stringify(value)); } catch (error) {}
+    }
+
+    let syncTimer;
+    function sync(activity){
+        if (!window.MathBinderSearch || !MathBinderSearch.activityUrl || !MathBinderSearch.restNonce) return;
+        window.clearTimeout(syncTimer);
+        syncTimer = window.setTimeout(function(){
+            fetch(MathBinderSearch.activityUrl, {
+                method:'POST', credentials:'same-origin',
+                headers:{'Content-Type':'application/json','X-WP-Nonce':MathBinderSearch.restNonce},
+                body:JSON.stringify(activity)
+            }).catch(function(){});
+        }, 350);
+    }
+
+    function state(){
+        const stored = readJSON(KEY, {});
+        const server = window.MathBinderSearch && MathBinderSearch.serverActivity && typeof MathBinderSearch.serverActivity === 'object' ? MathBinderSearch.serverActivity : null;
+        if ((!stored || typeof stored !== 'object' || Array.isArray(stored)) && server) {
+            writeJSON(KEY, server);
+            return server;
+        }
+        if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {version:1, lessons:{}};
+        if (!stored.lessons || typeof stored.lessons !== 'object') stored.lessons = {};
+        if (server && server.lessons) {
+            Object.keys(server.lessons).forEach(function(id){
+                const local = stored.lessons[id];
+                if (!local || String(server.lessons[id].updatedAt || '') > String(local.updatedAt || '')) stored.lessons[id] = server.lessons[id];
+            });
+            if (!stored.lastLessonId && server.lastLessonId) stored.lastLessonId = server.lastLessonId;
+            writeJSON(KEY, stored);
+        }
+        stored.version = 1;
+        return stored;
+    }
+
+    function currentLesson(){
+        const panel = document.querySelector('.mb-progress-panel[data-current-post]');
+        if (!panel) return null;
+        return {
+            id: String(panel.dataset.currentPost || ''),
+            title: panel.dataset.pageTitle || document.title,
+            url: panel.dataset.pageUrl || window.location.href,
+            section: panel.dataset.sectionTitle || 'Binder Section',
+            sectionSlug: panel.dataset.section || 'mathbinder'
+        };
+    }
+
+    function update(lesson, changes){
+        if (!lesson || !lesson.id) return;
+        const activity = state();
+        const previous = activity.lessons[lesson.id] || {};
+        activity.lessons[lesson.id] = Object.assign({}, previous, lesson, changes, {
+            id: lesson.id,
+            updatedAt: new Date().toISOString()
+        });
+        writeJSON(KEY, activity);
+        sync(activity);
+        document.dispatchEvent(new CustomEvent('mathbinder:activity-updated', {detail:activity.lessons[lesson.id]}));
+    }
+
+    function migrateLegacy(){
+        const activity = state();
+        let changed = false;
+        for (let index = 0; index < localStorage.length; index++) {
+            const storageKey = localStorage.key(index) || '';
+            if (storageKey.indexOf('mathbinder_completed_') !== 0) continue;
+            const sectionSlug = storageKey.slice('mathbinder_completed_'.length);
+            const completed = readJSON(storageKey, []);
+            if (!Array.isArray(completed)) continue;
+            completed.forEach(function(id){
+                const lessonId = String(id);
+                const previous = activity.lessons[lessonId] || {};
+                if (!previous.completed) {
+                    activity.lessons[lessonId] = Object.assign({}, previous, {id:lessonId, sectionSlug:sectionSlug, started:true, completed:true});
+                    changed = true;
+                }
+            });
+        }
+        const last = readJSON('mathbinder_last_lesson', null);
+        if (last && last.id) {
+            const id = String(last.id);
+            activity.lessons[id] = Object.assign({}, activity.lessons[id] || {}, last, {id:id, started:true});
+            activity.lastLessonId = id;
+            changed = true;
+        }
+        if (changed) writeJSON(KEY, activity);
+        if (changed) sync(activity);
+        return activity;
+    }
+
+    window.MathBinderStudentActivity = {
+        read: function(){ return migrateLegacy(); },
+        update: update,
+        key: KEY
+    };
+
+    document.addEventListener('DOMContentLoaded', function(){
+        migrateLegacy();
+        const lesson = currentLesson();
+        if (!lesson) return;
+        update(lesson, {started:true, openedAt:new Date().toISOString()});
+        const activity = state();
+        activity.lastLessonId = lesson.id;
+        writeJSON(KEY, activity);
+        sync(activity);
+    });
+
+    document.addEventListener('click', function(event){
+        const lesson = currentLesson();
+        if (!lesson) return;
+        if (event.target.closest('.mb-mark-complete')) {
+            update(lesson, {started:true, completed:true, completedAt:new Date().toISOString()});
+        }
+    });
+
+    let notesTimer;
+    document.addEventListener('input', function(event){
+        if (!event.target.matches('.mb-student-notes, .mb-reflection-important, .mb-reflection-question, .mb-reflection-connection')) return;
+        const lesson = currentLesson();
+        if (!lesson) return;
+        window.clearTimeout(notesTimer);
+        notesTimer = window.setTimeout(function(){
+            const workbook = document.querySelector('.mb-workbook-section');
+            const fields = workbook ? Array.from(workbook.querySelectorAll('.mb-student-notes, .mb-reflection-important, .mb-reflection-question, .mb-reflection-connection')) : [];
+            const values = fields.map(function(field){ return String(field.value || ''); });
+            const hasNotes = values.some(function(value){ return value.trim().length > 0; });
+            update(lesson, {started:true, hasNotes:!!hasNotes, noteValues:values, notesUpdatedAt:new Date().toISOString()});
+
+            const savedKey = 'mathbinder_saved_items_v2';
+            const saved = readJSON(savedKey, []);
+            const items = Array.isArray(saved) ? saved : [];
+            const uid = 'auto-notes:' + lesson.id;
+            const existing = items.findIndex(function(item){ return item && item.uid === uid; });
+            if (hasNotes) {
+                const noteItem = {
+                    uid: uid,
+                    kind: 'notes',
+                    title: lesson.title + ' — My Math Notes',
+                    lessonTitle: lesson.title,
+                    sectionTitle: lesson.section,
+                    lessonUrl: lesson.url,
+                    url: lesson.url + '#workbook',
+                    values: values,
+                    activity: {
+                        title: lesson.title + ' — My Math Notes',
+                        type: 'My Math Notes',
+                        fields: 'My notes|Most important idea|Question I still have|Real-world connection'
+                    },
+                    addedAt: existing >= 0 ? Number(items[existing].addedAt || Date.now()) : Date.now(),
+                    updatedAt: Date.now()
+                };
+                if (existing >= 0) items[existing] = noteItem;
+                else items.push(noteItem);
+            } else if (existing >= 0) {
+                items.splice(existing, 1);
+            }
+            writeJSON(savedKey, items);
+        }, 250);
+    });
+})();
 
 /* MathBinder 13.0 — student progress, favorites, resume, and dashboard */
 (function(){
@@ -964,6 +1607,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
 /* MathBinder 15.0 — My Math Journal autosave and print */
 (function(){
+    const BINDER_KEY = 'mathbinder_saved_items_v2';
     function readJSON(key, fallback){
         try {
             const value = JSON.parse(localStorage.getItem(key) || '');
@@ -1007,8 +1651,50 @@ document.addEventListener('DOMContentLoaded', function(){
     }
 
     function save(journal, message){
-        writeJSON(key(journal.dataset.workbookPost), getJournal(journal));
+        const data = getJournal(journal);
+        writeJSON(key(journal.dataset.workbookPost), data);
+        const items = readJSON(BINDER_KEY, []);
+        const journalUid = 'journal:' + journal.dataset.workbookPost;
+        const savedItem = Array.isArray(items) ? items.find(function(item){ return item.uid === journalUid; }) : null;
+        if (savedItem) {
+            savedItem.values = [data.important, data.question, data.connection, data.notes, data.confidence];
+            savedItem.updatedAt = Date.now();
+            writeJSON(BINDER_KEY, items);
+        }
         showStatus(journal, message || 'Saved');
+    }
+
+    function addJournalToBinder(journal){
+        const data = getJournal(journal);
+        const items = readJSON(BINDER_KEY, []);
+        const records = Array.isArray(items) ? items : [];
+        const journalUid = 'journal:' + journal.dataset.workbookPost;
+        let item = records.find(function(record){ return record.uid === journalUid; });
+        const record = {
+            uid: journalUid,
+            kind: 'journal',
+            lessonId: String(journal.dataset.workbookPost),
+            title: (journal.dataset.workbookTitle || 'Lesson') + ' Math Journal',
+            lessonTitle: journal.dataset.workbookTitle || 'Lesson',
+            sectionTitle: journal.dataset.workbookSection || 'Binder Section',
+            lessonUrl: window.location.href.split('#')[0],
+            activity: {
+                type: 'Math Journal',
+                title: (journal.dataset.workbookTitle || 'Lesson') + ' Math Journal',
+                prompt: 'Review and continue your saved thinking from this lesson.',
+                fields: 'Most important idea|One question I still have|Real-world connection|My Math Notes|Confidence level'
+            },
+            values: [data.important, data.question, data.connection, data.notes, data.confidence],
+            drawings: item && item.drawings ? item.drawings : {},
+            addedAt: item && item.addedAt ? item.addedAt : Date.now(),
+            updatedAt: Date.now()
+        };
+        if (item) Object.assign(item, record);
+        else records.unshift(record);
+        writeJSON(BINDER_KEY, records);
+        save(journal, 'Added to My Binder');
+        const button = journal.querySelector('.mb-add-journal-to-binder');
+        if (button) button.textContent = 'Added to My Binder';
     }
 
     function autosaveInput(journal, element){
@@ -1076,6 +1762,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
         const status = journal.querySelector('.mb-workbook-save-state');
         if (status) status.textContent = 'Saved automatically';
+        const binderItems = readJSON(BINDER_KEY, []);
+        if (Array.isArray(binderItems) && binderItems.some(function(item){ return item.uid === 'journal:' + journal.dataset.workbookPost; })) {
+            const button = journal.querySelector('.mb-add-journal-to-binder');
+            if (button) button.textContent = 'Added to My Binder';
+        }
     });
 
     document.addEventListener('click', function(event){
@@ -1092,6 +1783,11 @@ document.addEventListener('DOMContentLoaded', function(){
             }
         }
 
+        if (event.target.closest('.mb-add-journal-to-binder')) {
+            addJournalToBinder(journal);
+            return;
+        }
+
         if (event.target.closest('.mb-clear-journal')) {
             if (!window.confirm('Clear all notes, reflections, and confidence for this Math Journal?')) return;
 
@@ -1105,8 +1801,7 @@ document.addEventListener('DOMContentLoaded', function(){
             const count = journal.querySelector('[data-note-count]');
             if (count) count.textContent = '0 words';
 
-            writeJSON(key(journal.dataset.workbookPost), {});
-            showStatus(journal, 'Journal cleared');
+            save(journal, 'Journal cleared');
         }
     });
 })();
@@ -1218,6 +1913,7 @@ document.addEventListener('DOMContentLoaded', function(){
     function renderCollectionDashboard(){
         const dashboard = document.querySelector('.mb-collection-dashboard');
         if (!dashboard) return;
+        if (dashboard.matches('[data-my-mathbinder]')) return;
 
         const items = collection();
         const lessons = new Set(items.map(function(item){ return String(item.postId); }));
@@ -1421,6 +2117,34 @@ document.addEventListener('click', function(event){
             }
         }
 
+        const videoChoice = event.target.closest('.mb-video-playlist a[data-video-embed]');
+        if (videoChoice) {
+            const embedUrl = videoChoice.dataset.videoEmbed || '';
+            if (embedUrl) {
+                event.preventDefault();
+                const studio = videoChoice.closest('.mb-watch-studio');
+                const featured = studio ? studio.querySelector('[data-featured-video]') : null;
+                const nowPlaying = studio ? studio.querySelector('.mb-watch-now-playing h3') : null;
+                if (featured) {
+                    let iframe = featured.querySelector('iframe');
+                    if (!iframe) {
+                        featured.innerHTML = '';
+                        iframe = document.createElement('iframe');
+                        iframe.loading = 'lazy';
+                        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+                        iframe.allowFullscreen = true;
+                        featured.appendChild(iframe);
+                    }
+                    iframe.src = embedUrl + (embedUrl.includes('?') ? '&' : '?') + 'autoplay=1';
+                    iframe.title = videoChoice.dataset.videoTitle || 'Math lesson video';
+                }
+                if (nowPlaying) nowPlaying.textContent = videoChoice.dataset.videoTitle || '';
+                studio.querySelectorAll('.mb-video-playlist a').forEach(function(link) {
+                    link.classList.toggle('is-current', link === videoChoice);
+                });
+            }
+        }
+
         const printTranscript = event.target.closest('.mb-print-transcript');
         if (printTranscript) {
             const section = printTranscript.closest('.mb-transcript-section');
@@ -1589,6 +2313,11 @@ document.addEventListener('click', function(event){
         return Array.isArray(value) ? value : [];
     }
 
+    function sharedItems(){
+        const value = read('mathbinder_saved_items_v2', []);
+        return Array.isArray(value) ? value : [];
+    }
+
     function addCurrentLesson(section){
         const postId = String(section.dataset.resourcePost || '');
         const list = lessons();
@@ -1619,7 +2348,8 @@ document.addEventListener('click', function(event){
             addButton.textContent = saved ? '✓ Added to My Binder' : '＋ Add ' + (section.dataset.resourceTitle || 'Lesson');
         }
 
-        const count = list.length;
+        const notebookItems = sharedItems();
+        const count = list.length + notebookItems.length;
         const countNode = section.querySelector('[data-binder-lesson-count]');
         const previewCount = section.querySelector('[data-preview-count]');
         const progress = section.querySelector('[data-binder-progress-fill]');
@@ -1627,7 +2357,7 @@ document.addEventListener('click', function(event){
         const percent = Math.min(100, Math.round((count / 25) * 100));
 
         if (countNode) countNode.textContent = count;
-        if (previewCount) previewCount.textContent = count + (count === 1 ? ' lesson' : ' lessons');
+        if (previewCount) previewCount.textContent = count + (count === 1 ? ' saved item' : ' saved items');
         if (progress) progress.style.width = percent + '%';
         if (progressLabel) progressLabel.textContent = count ? count + ' of 25 milestone lessons' : 'Start your collection';
 
@@ -1642,10 +2372,26 @@ document.addEventListener('click', function(event){
         const recent = section.querySelector('[data-recent-binder-list]');
         if (recent) {
             recent.innerHTML = '';
-            if (!list.length) {
-                recent.innerHTML = '<div class="mb-binder-empty"><strong>Your saved lessons will appear here.</strong><span>Build a binder you can use all year.</span></div>';
+            const recentItems = notebookItems.map(function(item){
+                return {
+                    title: item.activity && item.activity.title ? item.activity.title : (item.title || 'Saved notebook page'),
+                    sectionTitle: item.sectionTitle || 'Binder Section',
+                    url: '/your-binder/',
+                    added: item.updatedAt || item.addedAt || 0
+                };
+            }).concat(list.map(function(item){
+                return {
+                    title: item.title,
+                    sectionTitle: item.sectionTitle,
+                    url: item.url,
+                    added: Date.parse(item.added || '') || 0
+                };
+            })).sort(function(a,b){ return Number(b.added) - Number(a.added); });
+
+            if (!recentItems.length) {
+                recent.innerHTML = '<div class="mb-binder-empty"><strong>Your saved items will appear here.</strong><span>Build a binder you can use all year.</span></div>';
             } else {
-                list.slice(0, 5).forEach(function(item){
+                recentItems.slice(0, 5).forEach(function(item){
                     const card = document.createElement('a');
                     card.href = item.url || '#';
                     card.className = 'mb-recent-binder-item';
@@ -1700,6 +2446,10 @@ document.addEventListener('click', function(event){
     }
 
     document.addEventListener('DOMContentLoaded', function(){
+        render(document.querySelector('.mb-gold-binder'));
+    });
+
+    window.addEventListener('mathbinder:saved-items-changed', function(){
         render(document.querySelector('.mb-gold-binder'));
     });
 
@@ -1896,6 +2646,20 @@ document.addEventListener('click', function(event){
         result.attempts = Number(previous.attempts || 0) + 1;
         result.updated = new Date().toISOString();
         write(key(section.dataset.masteryPost), result);
+
+        if (window.MathBinderStudentActivity) {
+            window.MathBinderStudentActivity.update({
+                id: String(section.dataset.masteryPost || ''),
+                title: section.dataset.masteryTitle || 'MathBinder lesson',
+                section: section.dataset.masterySection || 'MathBinder'
+            }, {
+                started: true,
+                masteryScore: result.percent,
+                masteryPassed: !!result.passed,
+                masteryAttempts: result.attempts,
+                masteryUpdatedAt: result.updated
+            });
+        }
 
         if (result.passed) {
             const badges = read(badgeKey(), []);

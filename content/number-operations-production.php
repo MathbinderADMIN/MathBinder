@@ -20,7 +20,11 @@ return array(
         'What if division does not come out evenly? The leftover amount is called the remainder, and it should be written clearly in the answer.',
         'How can I check my work? Use the inverse operation. For example, if 8 + 7 = 15, then 15 - 7 = 8.'
     ),
-    'watch_it' => 'Whole Number Operations Review | Math with Mr. J | https://www.youtube.com/watch?v=HAhg0uXn9GA',
+    'watch_it' => array(
+        'title' => 'Video resource pending verification',
+        'status' => 'placeholder',
+        'message' => 'A verified Number Operations video will be added before publication.'
+    ),
     'practice_it' => array(
         'Solve: 468 + 275 = ? Answer: 743.',
         'Solve: 902 - 458 = ? Answer: 444.',

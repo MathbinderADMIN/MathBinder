@@ -59,22 +59,22 @@ class MathBinder_Lesson_Catalog {
                 'slug' => 'triangles-transformations',
                 'number' => 6,
                 'title' => 'Triangles & Transformations',
-                'inventory_status' => 'not_started',
-                'description' => 'Section subtitle only in the current PDF.',
+                'inventory_status' => 'complete',
+                'description' => 'Explore transformations, congruence, similarity, triangle relationships, coordinate geometry, and geometric reasoning.',
             ),
             'volume-area' => array(
                 'slug' => 'volume-area',
                 'number' => 7,
                 'title' => 'Volume & Area',
-                'inventory_status' => 'not_started',
-                'description' => 'Section subtitle only in the current PDF.',
+                'inventory_status' => 'complete',
+                'description' => 'Explore area, surface area, volume, circles, composite figures, scale drawings, cross-sections, and three-dimensional measurement.',
             ),
             'probability-statistics' => array(
                 'slug' => 'probability-statistics',
                 'number' => 8,
                 'title' => 'Probability & Statistics',
-                'inventory_status' => 'not_started',
-                'description' => 'Section subtitle only in the current PDF.',
+                'inventory_status' => 'complete',
+                'description' => 'Explore data displays, distributions, sampling, probability, association, simulation, regression, correlation, and causation.',
             ),
         );
     }
