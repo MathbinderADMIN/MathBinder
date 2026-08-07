@@ -12,6 +12,7 @@ final class MathBinder_Canvas_Integration {
 
     public static function register() {
         MathBinder_Canvas_Settings::register();
+        MathBinder_Canvas_Diagnostics::register();
         MathBinder_Canvas_Transport::register();
     }
 

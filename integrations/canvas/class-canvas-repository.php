@@ -20,4 +20,26 @@ final class MathBinder_Canvas_Repository {
         $wpdb->insert($table,['deployment_key'=>self::deployment_key($settings),'job_type'=>sanitize_key($type),'direction'=>'outbound','status'=>'queued','mathbinder_type'=>sanitize_key($mb_type),'mathbinder_id'=>(string)$mb_id,'external_id'=>sanitize_text_field($external_id),'payload_json'=>wp_json_encode($payload),'created_at'=>$now,'updated_at'=>$now]);
         return (int)$wpdb->insert_id;
     }
+
+    public static function mappings(array $settings, $limit = 100) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'mb_canvas_mappings';
+        $limit = max(1, min(200, absint($limit)));
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE deployment_key=%s ORDER BY updated_at DESC LIMIT %d",
+            self::deployment_key($settings),
+            $limit
+        ), ARRAY_A);
+    }
+
+    public static function jobs(array $settings, $limit = 50) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'mb_canvas_sync_jobs';
+        $limit = max(1, min(100, absint($limit)));
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT id,job_type,direction,status,mathbinder_type,mathbinder_id,external_id,attempts,last_error,created_at,updated_at FROM {$table} WHERE deployment_key=%s ORDER BY id DESC LIMIT %d",
+            self::deployment_key($settings),
+            $limit
+        ), ARRAY_A);
+    }
 }

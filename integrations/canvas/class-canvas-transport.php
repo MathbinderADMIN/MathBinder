@@ -36,5 +36,5 @@ final class MathBinder_Canvas_Transport {
     }
     public static function status(){return MathBinder_Canvas_Integration::status();}
     public static function admin_permission(){return current_user_can(MathBinder_Capabilities::MANAGE_INTEGRATIONS);}
-    private static function gates_pass(){ $r=MathBinder_Canvas_Protocol::readiness();return !empty($r['configuration_complete'])&&!empty($r['locally_validated'])&&!empty($r['activation_gate_enabled'])&&!empty($r['adapter_installed']); }
+    private static function gates_pass(){ $s=MathBinder_Canvas_Settings::get();$r=MathBinder_Canvas_Protocol::readiness();return ($s['operating_mode']??'disabled')==='sandbox'&&!empty($r['configuration_complete'])&&!empty($r['locally_validated'])&&!empty($r['activation_gate_enabled'])&&!empty($r['adapter_installed']); }
 }

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 30.27.0
+ * Version: 30.28.0
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -45,6 +45,7 @@ require_once __DIR__ . '/integrations/canvas/class-lti-canvas-adapter.php';
 require_once __DIR__ . '/integrations/canvas/class-canvas-settings.php';
 require_once __DIR__ . '/integrations/canvas/class-canvas-protocol.php';
 require_once __DIR__ . '/integrations/canvas/class-canvas-transport.php';
+require_once __DIR__ . '/integrations/canvas/class-canvas-diagnostics.php';
 require_once __DIR__ . '/integrations/canvas/class-canvas-integration.php';
 require_once __DIR__ . '/foundation/bootstrap.php';
 
@@ -53,7 +54,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '30.27.0';
+    const VERSION = '30.28.0';
 
     private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
