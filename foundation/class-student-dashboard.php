@@ -66,6 +66,7 @@ final class MathBinder_Student_Dashboard {
         $preferences = get_user_meta(absint($user_id), 'mb_student_binder_preferences_v1', true);
         if (!is_array($preferences)) $preferences = ['title'=>'My MathBinder','theme'=>'teal','stickers'=>[]];
 
+        $coverage = MathBinder_Student_Access::coverage($user_id);
         return [
             'is_fixture' => false,
             'student_name' => $name,
@@ -74,6 +75,7 @@ final class MathBinder_Student_Dashboard {
             'activity' => $activity,
             'assignments' => $assignments,
             'preferences' => wp_parse_args($preferences, ['title'=>'My MathBinder','theme'=>'teal','stickers'=>[]]),
+            'access' => $coverage,
             'mastery_path' => [
                 'title' => 'Your Learning',
                 'subtitle' => 'Choose a topic and MathBinder will keep your place.',

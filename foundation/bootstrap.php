@@ -7,6 +7,7 @@ if (!defined('ABSPATH')) exit;
  */
 function mathbinder_foundation_bootstrap() {
     MathBinder_Capabilities::register();
+    MathBinder_Student_Access::register();
     MathBinder_Student_Dashboard::register();
     MathBinder_Teacher_Dashboard::register();
     MathBinder_External_Practice::register();

@@ -2,7 +2,9 @@
 
 Store packaged release ZIPs here after source changes are reviewed and tested.
 
-Current implementation baseline: **MathBinder Core 30.31.0 / MathBinder Theme 1.0.0**.
+Current implementation baseline: **MathBinder Core 30.32.0 / MathBinder Theme 1.0.0**.
+
+Core 30.32.0 adds classwide student content access. An authorized student enrolled in an active class receives every student-facing Binder lesson and premium learning tool covered by the class organization’s active license; assignments and mastery paths guide learning without locking other published topics. Coverage follows school/district, classroom, family, direct, then free precedence; trial, grace, class, term, and enrollment windows are enforced; and ending coverage preserves the permanent account, notes, progress, evidence, and submitted work.
 
 Core 30.31.0 adds invitation-based co-teacher, substitute, and class-aide access. Primary teachers choose selected classes, full or custom permissions, and optional access dates. Staff use individual identities; invitations expire and are single-use; delegated actions remain audit-attributed; and billing, ownership, and staff-management authority stay protected.
 

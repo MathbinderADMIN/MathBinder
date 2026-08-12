@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 30.31.0
+ * Version: 30.32.0
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -22,6 +22,7 @@ require_once __DIR__ . '/provisioning/adapters/wordpress-writer.php';
 require_once __DIR__ . '/provisioning/lesson-provisioner.php';
 require_once __DIR__ . '/foundation/class-migrations.php';
 require_once __DIR__ . '/foundation/class-capabilities.php';
+require_once __DIR__ . '/foundation/class-student-access.php';
 require_once __DIR__ . '/foundation/class-audit-log.php';
 require_once __DIR__ . '/foundation/class-rest-controller.php';
 require_once __DIR__ . '/foundation/class-student-dashboard.php';
@@ -56,7 +57,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '30.31.0';
+    const VERSION = '30.32.0';
 
     private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
@@ -4336,6 +4337,7 @@ final class MathBinder_Core {
 
     public function assignment_helper_shortcode() {
         $configured = defined('MATHBINDER_OPENAI_API_KEY') && trim((string) MATHBINDER_OPENAI_API_KEY) !== '';
+        $authorized = is_user_logged_in() && MathBinder_Student_Access::has_full_access();
         ob_start(); ?>
         <main class="mb-public-page mb-assignment-page">
             <?php echo $this->public_page_header('Upload • Reflect • Revise', 'AI Assignment Tutor', 'Get a helpful next step without having the answer simply given to you.'); ?>
@@ -4343,7 +4345,12 @@ final class MathBinder_Core {
                 <strong>Protect your privacy.</strong>
                 <span>Remove your name, school, student ID, grade report, email address, and any other personal information before uploading.</span>
             </section>
-            <?php if (!$configured): ?>
+            <?php if (!$authorized): ?>
+                <section class="mb-assignment-unavailable">
+                    <div class="mb-assignment-lock" aria-hidden="true">🔒</div>
+                    <div><p class="mb-public-eyebrow">Premium student access</p><h2>Join an eligible class or use an active plan.</h2><p>Your free MathBinder access still includes Watch It videos and links to IXL, Khan Academy, and DeltaMath. Full learning tools activate through an eligible classroom, family, school, district, or individual plan.</p></div>
+                </section>
+            <?php elseif (!$configured): ?>
                 <section class="mb-assignment-unavailable">
                     <div class="mb-assignment-lock" aria-hidden="true">🔒</div>
                     <div><p class="mb-public-eyebrow">Teacher setup required</p><h2>The helper is almost ready.</h2><p>The secure AI connection has not been enabled yet. No file can be uploaded or sent while the connection is off.</p></div>
@@ -4406,6 +4413,9 @@ final class MathBinder_Core {
 
     public function ajax_assignment_feedback() {
         check_ajax_referer('mb_assignment_feedback_nonce', 'nonce');
+        if (!is_user_logged_in() || !MathBinder_Student_Access::has_full_access()) {
+            wp_send_json_error(['message' => 'Full student access is required for the AI Assignment Tutor.'], 403);
+        }
         if (!defined('MATHBINDER_OPENAI_API_KEY') || trim((string) MATHBINDER_OPENAI_API_KEY) === '') {
             wp_send_json_error(['message' => 'The secure AI connection is not configured.'], 503);
         }

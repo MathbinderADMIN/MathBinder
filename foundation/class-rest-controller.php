@@ -57,6 +57,7 @@ final class MathBinder_REST_Controller {
     }
 
     public static function save_student_activity(WP_REST_Request $request) {
+        if (!MathBinder_Student_Access::has_full_access()) return new WP_Error('mb_full_access_required', 'Full student access is required to sync saved learning activity.', ['status'=>403]);
         $payload = $request->get_json_params();
         $lessons = isset($payload['lessons']) && is_array($payload['lessons']) ? $payload['lessons'] : [];
         $clean = ['version'=>1, 'lastLessonId'=>'', 'lessons'=>[]];
@@ -106,7 +107,8 @@ final class MathBinder_REST_Controller {
         }
         MathBinder_Identity_Service::assign_role($user_id, 'student', 'class', (int)$class['id']);
         MathBinder_Audit_Log::record('join_class', 'class', (int)$class['id'], ['user_id'=>$user_id,'source'=>'class_code']);
-        return rest_ensure_response(['data'=>['joined'=>true,'class_id'=>(int)$class['id'],'class_name'=>trim($class['name'].' '.$class['section_name'])]]);
+        $coverage = MathBinder_Student_Access::coverage($user_id);
+        return rest_ensure_response(['data'=>['joined'=>true,'class_id'=>(int)$class['id'],'class_name'=>trim($class['name'].' '.$class['section_name']),'full_access'=>!empty($coverage['full_access']),'access_label'=>$coverage['label']]]);
     }
 
     public static function save_student_preferences(WP_REST_Request $request) {
