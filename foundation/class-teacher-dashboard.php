@@ -164,6 +164,10 @@ final class MathBinder_Teacher_Dashboard {
         return false;
     }
 
+    public static function teacher_authorized_for_student($teacher_id, $student_id) {
+        return self::can_view() && self::authorized_student(absint($teacher_id), absint($student_id));
+    }
+
     private static function reviews($student_id) {
         $reviews = get_user_meta(absint($student_id), 'mb_teacher_evidence_reviews_v1', true);
         return is_array($reviews) ? $reviews : [];
@@ -332,15 +336,25 @@ PROMPT;
         $lesson_id = isset($_POST['lesson_id']) ? sanitize_text_field(wp_unslash($_POST['lesson_id'])) : '';
         $decision = isset($_POST['decision']) ? sanitize_key(wp_unslash($_POST['decision'])) : '';
         $feedback = isset($_POST['feedback']) ? sanitize_textarea_field(wp_unslash($_POST['feedback'])) : '';
-        if (!$student_id || $lesson_id === '' || !in_array($decision, ['feedback','revision_requested','mastered'], true) || !self::authorized_student($teacher_id, $student_id)) wp_die('This evidence record is not available in your teacher workspace.', 'Evidence unavailable', ['response'=>403]);
+        if (!$student_id || $lesson_id === '' || !in_array($decision, ['feedback','verified','revision_requested','mastered'], true) || !self::authorized_student($teacher_id, $student_id)) wp_die('This evidence record is not available in your teacher workspace.', 'Evidence unavailable', ['response'=>403]);
+        $is_external = strpos($lesson_id, 'external:') === 0;
         $activity = self::activity($student_id);
-        if (empty($activity['lessons'][$lesson_id]['completed'])) wp_die('Only completed lesson evidence can be reviewed.', 'Evidence incomplete', ['response'=>400]);
+        if ($is_external) {
+            $external_id = substr($lesson_id, 9);
+            if (!MathBinder_External_Practice::record($student_id, $external_id)) wp_die('This external practice record could not be found.', 'Evidence unavailable', ['response'=>404]);
+        } elseif (empty($activity['lessons'][$lesson_id]['completed'])) wp_die('Only completed lesson evidence can be reviewed.', 'Evidence incomplete', ['response'=>400]);
         if (($decision === 'feedback' || $decision === 'revision_requested') && $feedback === '') {
             wp_safe_redirect(add_query_arg(['student'=>$student_id,'review_notice'=>'feedback_required'], home_url('/'.self::PAGE_SLUG.'/')).'#evidence'); exit;
         }
         $reviews = self::reviews($student_id);
         $reviews[$lesson_id] = ['lesson_id'=>$lesson_id,'decision'=>$decision,'feedback'=>$feedback,'teacher_id'=>$teacher_id,'teacher_name'=>wp_get_current_user()->display_name,'reviewed_at'=>current_time('mysql', true)];
         update_user_meta($student_id, 'mb_teacher_evidence_reviews_v1', $reviews);
+        if ($is_external && in_array($decision, ['verified','revision_requested','mastered'], true)) {
+            $external_records = MathBinder_External_Practice::records($student_id);
+            $external_records[$external_id]['status'] = $decision;
+            $external_records[$external_id]['updated_at'] = current_time('mysql', true);
+            update_user_meta($student_id, MathBinder_External_Practice::META_KEY, $external_records);
+        }
         MathBinder_Audit_Log::record('update', 'teacher_evidence_review', $student_id, ['lesson_id'=>$lesson_id,'decision'=>$decision]);
         wp_safe_redirect(add_query_arg(['student'=>$student_id,'review_notice'=>'saved'], home_url('/'.self::PAGE_SLUG.'/')).'#evidence'); exit;
     }
@@ -462,6 +476,15 @@ PROMPT;
                         <?php if ($review): ?><div class="mb-teacher-review-history"><strong><?php echo esc_html($review['decision']==='mastered' ? 'Mastered' : ($review['decision']==='revision_requested' ? 'Revision requested' : 'Feedback sent')); ?></strong><span>Reviewed <?php echo esc_html(wp_date(get_option('date_format'), strtotime($review['reviewed_at']))); ?> by <?php echo esc_html($review['teacher_name']); ?></span><?php if (!empty($review['feedback'])): ?><p><?php echo esc_html($review['feedback']); ?></p><?php endif; ?></div><?php endif; ?>
                         <form class="mb-teacher-review-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="mb_teacher_evidence_review"><input type="hidden" name="student_id" value="<?php echo absint($selected_id); ?>"><input type="hidden" name="lesson_id" value="<?php echo esc_attr($lesson_id); ?>"><?php wp_nonce_field('mb_teacher_evidence_review', 'mb_teacher_review_nonce'); ?><label>Teacher feedback<textarea name="feedback" rows="3" maxlength="2000" placeholder="Share specific, helpful feedback with this student."><?php echo esc_textarea($review['feedback'] ?? ''); ?></textarea></label><div class="mb-teacher-review-actions"><button type="submit" name="decision" value="feedback">Save Feedback</button><button class="is-revision" type="submit" name="decision" value="revision_requested">Request Revision</button><button class="is-mastered" type="submit" name="decision" value="mastered">Mark Mastered</button></div></form>
                     </article><?php endforeach; if(!$found): ?><div class="mb-teacher-empty"><strong>No completed lesson evidence yet.</strong><p>Activity will appear after the student marks a lesson complete.</p></div><?php endif; ?></div><?php endif; ?>
+                <?php if ($selected): $external_records=MathBinder_External_Practice::records($selected_id); if ($external_records): ?>
+                    <h3>External Practice</h3><div class="mb-teacher-evidence-list">
+                    <?php foreach ($external_records as $external_id=>$record): $review_key=MathBinder_External_Practice::review_key($external_id); $review=$reviews[$review_key] ?? []; $status=$review['decision'] ?? ($record['status'] ?? 'student_reported'); ?><article class="mb-teacher-evidence-card">
+                        <div class="mb-teacher-evidence-summary"><div><small><?php echo esc_html($record['platform'].' · '.$record['topic_title']); ?></small><strong><?php echo esc_html($record['activity_title']); ?></strong><p><?php echo esc_html($record['result'].' · '.wp_date(get_option('date_format'),strtotime($record['completed_on']))); ?></p></div><span><?php echo esc_html(MathBinder_External_Practice::status_label($status)); ?></span><?php if (!empty($record['activity_url'])): ?><a href="<?php echo esc_url($record['activity_url']); ?>" target="_blank" rel="noopener noreferrer">Open activity</a><?php endif; ?><?php if (!empty($record['evidence']['path'])): ?><a href="<?php echo esc_url(MathBinder_External_Practice::evidence_url($selected_id,$external_id)); ?>">View evidence</a><?php endif; ?></div>
+                        <p><strong>Student reflection:</strong> <?php echo esc_html($record['reflection']); ?></p>
+                        <?php if ($review): ?><div class="mb-teacher-review-history"><strong><?php echo esc_html(MathBinder_External_Practice::status_label($status)); ?></strong><span>Reviewed <?php echo esc_html(wp_date(get_option('date_format'),strtotime($review['reviewed_at']))); ?> by <?php echo esc_html($review['teacher_name']); ?></span><?php if (!empty($review['feedback'])): ?><p><?php echo esc_html($review['feedback']); ?></p><?php endif; ?></div><?php endif; ?>
+                        <form class="mb-teacher-review-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="mb_teacher_evidence_review"><input type="hidden" name="student_id" value="<?php echo absint($selected_id); ?>"><input type="hidden" name="lesson_id" value="<?php echo esc_attr($review_key); ?>"><?php wp_nonce_field('mb_teacher_evidence_review','mb_teacher_review_nonce'); ?><label>Teacher feedback<textarea name="feedback" rows="3" maxlength="2000"><?php echo esc_textarea($review['feedback'] ?? ''); ?></textarea></label><div class="mb-teacher-review-actions"><button type="submit" name="decision" value="verified">Verify Practice</button><button class="is-revision" type="submit" name="decision" value="revision_requested">Request Revision</button><button class="is-mastered" type="submit" name="decision" value="mastered">Mark Mastered</button></div></form>
+                    </article><?php endforeach; ?></div>
+                <?php endif; endif; ?>
             </section>
             <section id="canvas" class="mb-teacher-panel mb-canvas-panel"><div class="mb-teacher-heading"><div><small>Integration foundation</small><h2>Canvas</h2><p>Prepare MathBinder mastery paths for a future Canvas LTI 1.3 sandbox connection.</p></div><span class="mb-canvas-status <?php echo $canvas_status['adapter_ready'] ? 'is-ready' : 'is-off'; ?>"><?php echo esc_html($canvas_status['label']); ?></span></div>
                 <?php if ($canvas_notice === 'prepared'): ?><div class="mb-teacher-review-notice is-success" role="status">Assignment prepared for Canvas. Nothing was sent because the live connection is disabled.</div><?php endif; ?>

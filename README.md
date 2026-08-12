@@ -2,7 +2,9 @@
 
 Store packaged release ZIPs here after source changes are reviewed and tested.
 
-Current implementation baseline: **MathBinder Core 30.28.0 / MathBinder Theme 1.0.0**.
+Current implementation baseline: **MathBinder Core 30.30.0 / MathBinder Theme 1.0.0**.
+
+Core 30.30.0 adds External Practice Records for student-reported IXL, Khan Academy, DeltaMath, and other completed practice. Records connect to a MathBinder topic, appear in the Evidence Folder, support optional protected evidence files, and use class-authorized teacher verification, revision, and mastery review.
 
 Core 30.28.0 adds the administrator-only Canvas LTI administration and sandbox
 testing console. It provides Disabled and Sandbox operating modes, keeps Live

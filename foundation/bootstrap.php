@@ -9,6 +9,7 @@ function mathbinder_foundation_bootstrap() {
     MathBinder_Capabilities::register();
     MathBinder_Student_Dashboard::register();
     MathBinder_Teacher_Dashboard::register();
+    MathBinder_External_Practice::register();
     MathBinder_Identity_Service::register();
     MathBinder_Verification_Service::register();
     MathBinder_Account_Workspace::register();
