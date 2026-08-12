@@ -230,7 +230,7 @@ final class MathBinder_Frontend_Auth {
         $roles = (array) $user->roles;
         if (in_array('mb_student', $roles, true)) return self::page_url(['student-dashboard']);
         if (in_array('mb_parent', $roles, true)) return self::page_url(['parents', 'parent-resources']);
-        if (in_array('mb_teacher', $roles, true)) return self::page_url(['teacher-dashboard']);
+        if (in_array('mb_teacher', $roles, true) || in_array('mb_class_staff', $roles, true)) return self::page_url(['teacher-dashboard']);
         if (in_array('mb_school_admin', $roles, true)) return home_url('/mathbinder-account/');
         if (in_array('administrator', $roles, true)) return admin_url();
         return self::page_url(['your-binder', 'my-mathbinder']);

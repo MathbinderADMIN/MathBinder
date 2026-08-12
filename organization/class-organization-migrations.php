@@ -2,7 +2,7 @@
 if (!defined('ABSPATH')) exit;
 
 final class MathBinder_Organization_Migrations {
-    const VERSION = '3.1.0';
+    const VERSION = '3.2.0';
 
     public static function run() {
         global $wpdb;
@@ -99,6 +99,39 @@ final class MathBinder_Organization_Migrations {
             created_by bigint(20) unsigned NOT NULL DEFAULT 0,
             created_at datetime NOT NULL,
             PRIMARY KEY  (id), UNIQUE KEY token_hash (token_hash), KEY class_status (class_id,status)
+        ) {$c};");
+        dbDelta("CREATE TABLE {$p}mb_class_staff_access (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            class_id bigint(20) unsigned NOT NULL,
+            user_id bigint(20) unsigned NOT NULL DEFAULT 0,
+            account_email varchar(190) NOT NULL DEFAULT '',
+            display_name varchar(190) NOT NULL DEFAULT '',
+            staff_role varchar(30) NOT NULL DEFAULT 'class_aide',
+            access_level varchar(20) NOT NULL DEFAULT 'custom',
+            permissions_json longtext NULL,
+            starts_at datetime NULL,
+            expires_at datetime NULL,
+            status varchar(30) NOT NULL DEFAULT 'invited',
+            invited_by bigint(20) unsigned NOT NULL DEFAULT 0,
+            created_at datetime NOT NULL,
+            updated_at datetime NOT NULL,
+            accepted_at datetime NULL,
+            PRIMARY KEY  (id), UNIQUE KEY class_email (class_id,account_email),
+            KEY user_status (user_id,status), KEY class_status (class_id,status),
+            KEY expiration (status,expires_at)
+        ) {$c};");
+        dbDelta("CREATE TABLE {$p}mb_class_staff_invites (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            staff_access_id bigint(20) unsigned NOT NULL,
+            token_hash char(64) NOT NULL,
+            invited_email varchar(190) NOT NULL,
+            status varchar(30) NOT NULL DEFAULT 'pending',
+            expires_at datetime NOT NULL,
+            created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+            created_at datetime NOT NULL,
+            accepted_at datetime NULL,
+            PRIMARY KEY  (id), UNIQUE KEY token_hash (token_hash),
+            KEY staff_status (staff_access_id,status), KEY email_status (invited_email,status)
         ) {$c};");
         update_option('mathbinder_organization_schema_version', self::VERSION, false);
     }

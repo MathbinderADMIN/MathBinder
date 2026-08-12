@@ -44,7 +44,7 @@ final class MathBinder_Teacher_Dashboard {
 
     private static function can_view() {
         $user = wp_get_current_user();
-        return $user->exists() && (in_array('mb_teacher', (array)$user->roles, true) || in_array('mb_school_admin', (array)$user->roles, true) || user_can($user, 'manage_options'));
+        return $user->exists() && (in_array('mb_teacher', (array)$user->roles, true) || in_array('mb_school_admin', (array)$user->roles, true) || in_array('mb_class_staff', (array)$user->roles, true) || MathBinder_Class_Staff::has_any_access($user->ID) || user_can($user, 'manage_options'));
     }
 
     private static function classes($teacher_id) {
@@ -52,14 +52,12 @@ final class MathBinder_Teacher_Dashboard {
         if (user_can($teacher_id, 'manage_options') || user_can($teacher_id, MathBinder_Capabilities::MANAGE_ORGANIZATIONS)) {
             return $wpdb->get_results("SELECT * FROM {$wpdb->prefix}mb_classes WHERE status='active' ORDER BY name,section_name", ARRAY_A) ?: [];
         }
-        return $wpdb->get_results($wpdb->prepare("SELECT DISTINCT c.* FROM {$wpdb->prefix}mb_classes c LEFT JOIN {$wpdb->prefix}mb_enrollments e ON e.class_id=c.id AND e.user_id=%d AND e.role_key='teacher' AND e.status='active' WHERE c.status='active' AND (c.teacher_user_id=%d OR e.id IS NOT NULL) ORDER BY c.name,c.section_name", $teacher_id, $teacher_id), ARRAY_A) ?: [];
+        $now = current_time('mysql', true);
+        return $wpdb->get_results($wpdb->prepare("SELECT DISTINCT c.* FROM {$wpdb->prefix}mb_classes c LEFT JOIN {$wpdb->prefix}mb_enrollments e ON e.class_id=c.id AND e.user_id=%d AND e.role_key='teacher' AND e.status='active' LEFT JOIN {$wpdb->prefix}mb_class_staff_access s ON s.class_id=c.id AND s.user_id=%d AND s.status='active' AND (s.starts_at IS NULL OR s.starts_at<=%s) AND (s.expires_at IS NULL OR s.expires_at>=%s) WHERE c.status='active' AND (c.teacher_user_id=%d OR e.id IS NOT NULL OR s.id IS NOT NULL) ORDER BY c.name,c.section_name", $teacher_id, $teacher_id, $now, $now, $teacher_id), ARRAY_A) ?: [];
     }
 
     private static function teacher_can_manage_class($teacher_id, $class_id) {
-        foreach (self::classes($teacher_id) as $class) {
-            if ((int)$class['id'] === (int)$class_id) return true;
-        }
-        return false;
+        return MathBinder_Class_Staff::primary_can_manage($teacher_id, $class_id) || MathBinder_Class_Staff::can($teacher_id, $class_id, 'edit_class_settings');
     }
 
     private static function class_profiles() {
@@ -92,6 +90,8 @@ final class MathBinder_Teacher_Dashboard {
 
     public static function handle_create_class() {
         if (!is_user_logged_in() || !self::can_view()) wp_die('Teacher access required.', 'Teacher access required', ['response'=>403]);
+        $current = wp_get_current_user();
+        if (in_array('mb_class_staff',(array)$current->roles,true) && !in_array('mb_teacher',(array)$current->roles,true) && !in_array('mb_school_admin',(array)$current->roles,true) && !user_can($current,'manage_options')) wp_die('Delegated classroom staff cannot create new classrooms.', 'Permission required', ['response'=>403]);
         check_admin_referer('mb_teacher_create_class', 'mb_teacher_class_nonce');
         $teacher_id = get_current_user_id();
         $name = isset($_POST['class_name']) ? sanitize_text_field(wp_unslash($_POST['class_name'])) : '';
@@ -131,7 +131,7 @@ final class MathBinder_Teacher_Dashboard {
         $teacher_id = get_current_user_id();
         $class_id = isset($_POST['class_id']) ? absint($_POST['class_id']) : 0;
         $email = isset($_POST['student_email']) ? sanitize_email(wp_unslash($_POST['student_email'])) : '';
-        if (!self::teacher_can_manage_class($teacher_id, $class_id) || !is_email($email)) {
+        if (!MathBinder_Class_Staff::can($teacher_id, $class_id, 'enroll_students') || !is_email($email)) {
             wp_safe_redirect(add_query_arg('class_notice', 'invite_invalid', home_url('/'.self::PAGE_SLUG.'/')).'#classes'); exit;
         }
         MathBinder_Organization_Service::enroll($class_id, $email, 'student');
@@ -157,15 +157,15 @@ final class MathBinder_Teacher_Dashboard {
         return $wpdb->get_results($sql, ARRAY_A) ?: [];
     }
 
-    private static function authorized_student($teacher_id, $student_id) {
+    private static function authorized_student($teacher_id, $student_id, $permission = 'view_progress') {
         foreach (self::students(self::classes($teacher_id)) as $student) {
-            if ((int)$student['user_id'] === (int)$student_id) return true;
+            if ((int)$student['user_id'] === (int)$student_id && MathBinder_Class_Staff::can($teacher_id, $student['class_id'], $permission)) return true;
         }
         return false;
     }
 
     public static function teacher_authorized_for_student($teacher_id, $student_id) {
-        return self::can_view() && self::authorized_student(absint($teacher_id), absint($student_id));
+        return self::can_view() && self::authorized_student(absint($teacher_id), absint($student_id), 'view_evidence');
     }
 
     private static function reviews($student_id) {
@@ -180,7 +180,11 @@ final class MathBinder_Teacher_Dashboard {
 
     private static function teacher_paths($teacher_id) {
         return array_values(array_filter(self::mastery_paths(), function($path) use ($teacher_id) {
-            return (int)($path['teacher_id'] ?? 0) === (int)$teacher_id || user_can($teacher_id, 'manage_options');
+            if ((int)($path['teacher_id'] ?? 0) === (int)$teacher_id || user_can($teacher_id, 'manage_options')) return true;
+            $type=(string)($path['target_type']??''); $target=absint($path['target_id']??0);
+            if ($type==='class') return MathBinder_Class_Staff::can($teacher_id,$target,'view_progress');
+            if ($type==='student') return self::authorized_student($teacher_id,$target,'view_progress');
+            return false;
         }));
     }
 
@@ -267,6 +271,7 @@ PROMPT;
         $path = null;
         foreach (self::teacher_paths($teacher_id) as $candidate) if ((string)($candidate['id'] ?? '') === $path_id) { $path = $candidate; break; }
         if (!$path) wp_die('This mastery path is not available in your teacher workspace.', 'Mastery path unavailable', ['response'=>403]);
+        if (($path['target_type']??'')==='class' && !MathBinder_Class_Staff::can($teacher_id,absint($path['target_id']??0),'assign_lessons')) wp_die('Your delegated access does not include assignment preparation.', 'Permission required', ['response'=>403]);
         $result = MathBinder_Canvas_Integration::prepare_assignment($path, $teacher_id);
         if (is_wp_error($result)) wp_die(esc_html($result->get_error_message()), 'Canvas preparation failed', ['response'=>400]);
         MathBinder_Audit_Log::record('prepare', 'canvas_assignment', $path_id, ['target_type'=>$path['target_type'],'target_id'=>$path['target_id']]);
@@ -307,8 +312,8 @@ PROMPT;
         $branches = [];
         foreach (['foundational','developing','near_mastery','extension'] as $branch) $branches[$branch] = isset($_POST[$branch]) ? sanitize_textarea_field(wp_unslash($_POST[$branch])) : '';
         $valid_target = false;
-        if ($target_type === 'class') foreach (self::classes($teacher_id) as $class) if ((int)$class['id'] === $target_id) $valid_target = true;
-        if ($target_type === 'student') $valid_target = self::authorized_student($teacher_id, $target_id);
+        if ($target_type === 'class') $valid_target = MathBinder_Class_Staff::can($teacher_id, $target_id, 'assign_lessons') && (!$due_date || MathBinder_Class_Staff::can($teacher_id,$target_id,'manage_due_dates'));
+        if ($target_type === 'student') $valid_target = self::authorized_student($teacher_id, $target_id, 'assign_lessons');
         $valid_due_date = $due_date === '' || (bool)preg_match('/^\d{4}-\d{2}-\d{2}$/', $due_date);
         $allowed_mastery_grades = array_merge(['K'], array_map('strval', range(1, 12)));
         $publish_fields = [$title,$standard,$grade_level,$objectives,$prerequisites,$pretest_title,$pretest_instructions,$evidence_requirements,$posttest_title,$posttest_instructions,$reassessment];
@@ -336,7 +341,8 @@ PROMPT;
         $lesson_id = isset($_POST['lesson_id']) ? sanitize_text_field(wp_unslash($_POST['lesson_id'])) : '';
         $decision = isset($_POST['decision']) ? sanitize_key(wp_unslash($_POST['decision'])) : '';
         $feedback = isset($_POST['feedback']) ? sanitize_textarea_field(wp_unslash($_POST['feedback'])) : '';
-        if (!$student_id || $lesson_id === '' || !in_array($decision, ['feedback','verified','revision_requested','mastered'], true) || !self::authorized_student($teacher_id, $student_id)) wp_die('This evidence record is not available in your teacher workspace.', 'Evidence unavailable', ['response'=>403]);
+        $required_permission = $decision === 'mastered' ? 'mark_mastery' : ($decision === 'verified' ? ($lesson_id && strpos($lesson_id,'external:')===0 ? 'verify_external_practice' : 'approve_work') : 'provide_feedback');
+        if (!$student_id || $lesson_id === '' || !in_array($decision, ['feedback','verified','revision_requested','mastered'], true) || !self::authorized_student($teacher_id, $student_id, $required_permission)) wp_die('This evidence record is not available with your classroom permissions.', 'Permission required', ['response'=>403]);
         $is_external = strpos($lesson_id, 'external:') === 0;
         $activity = self::activity($student_id);
         if ($is_external) {
@@ -400,7 +406,7 @@ PROMPT;
     public static function handle_progress_export() {
         if (!is_user_logged_in() || !self::can_view()) wp_die('Teacher access required.', 'Teacher access required', ['response'=>403]);
         check_admin_referer('mb_teacher_progress_export');
-        $teacher_id = get_current_user_id(); $classes = self::classes($teacher_id); $students = self::students($classes); $paths = self::teacher_paths($teacher_id);
+        $teacher_id = get_current_user_id(); $classes = array_values(array_filter(self::classes($teacher_id),function($class)use($teacher_id){return MathBinder_Class_Staff::can($teacher_id,$class['id'],'export_progress');})); $students = self::students($classes); $paths = self::teacher_paths($teacher_id);
         nocache_headers(); header('Content-Type: text/csv; charset=utf-8'); header('Content-Disposition: attachment; filename="mathbinder-student-progress-'.gmdate('Y-m-d').'.csv"');
         $out = fopen('php://output', 'w');
         fputcsv($out, ['Student','Email','Class','Completed Lessons','Saved Notes','Last Activity','Assigned Paths','Completed Paths','Past Due Paths']);
@@ -417,15 +423,16 @@ PROMPT;
         if (!is_user_logged_in()) return '<section class="mb-dashboard-gate"><h1>Teacher Dashboard</h1><p>Log in with your teacher account to continue.</p><a class="mb-button mb-button-primary" href="'.esc_url(MathBinder_Frontend_Auth::login_url(get_permalink())).'">Log In</a></section>';
         if (!self::can_view()) return '<section class="mb-dashboard-gate"><h1>Teacher access required</h1><p>This dashboard is available only in a Teacher or School Administrator workspace.</p></section>';
 
-        $user = wp_get_current_user(); $classes = self::classes($user->ID); $students = self::students($classes); $paths = self::teacher_paths($user->ID); $published_paths = array_values(array_filter($paths, function($path){ return ($path['status'] ?? 'published') === 'published'; })); $lessons = self::lessons(); $canvas_status = MathBinder_Canvas_Integration::status(); $canvas_queue = MathBinder_Canvas_Integration::for_teacher($user->ID); $organizations = self::teacher_organizations($user->ID); $class_profiles = self::class_profiles();
+        $user = wp_get_current_user(); $classes = self::classes($user->ID); $visible_classes=array_values(array_filter($classes,function($class)use($user){return MathBinder_Class_Staff::can($user->ID,$class['id'],'view_roster')||MathBinder_Class_Staff::can($user->ID,$class['id'],'view_progress')||MathBinder_Class_Staff::can($user->ID,$class['id'],'view_evidence');})); $students = self::students($visible_classes); $paths = self::teacher_paths($user->ID); $published_paths = array_values(array_filter($paths, function($path){ return ($path['status'] ?? 'published') === 'published'; })); $lessons = self::lessons(); $canvas_status = MathBinder_Canvas_Integration::status(); $canvas_queue = MathBinder_Canvas_Integration::for_teacher($user->ID); $organizations = self::teacher_organizations($user->ID); $class_profiles = self::class_profiles();
         $total_completed = 0; $active_students = 0; $rows = [];
-        foreach ($students as $student) { $student['metrics'] = self::metrics($student['user_id']); $student['assignments'] = self::assignments_for_student($student['user_id'], $published_paths, $student['class_id']); $rows[] = $student; $total_completed += $student['metrics']['completed']; if ($student['metrics']['last']) $active_students++; }
+        foreach ($students as $student) { $student['can_view_progress']=MathBinder_Class_Staff::can($user->ID,$student['class_id'],'view_progress'); $student['can_view_evidence']=MathBinder_Class_Staff::can($user->ID,$student['class_id'],'view_evidence'); $student['metrics'] = $student['can_view_progress'] ? self::metrics($student['user_id']) : ['completed'=>0,'notes'=>0,'last'=>'','activity'=>['lessons'=>[]]]; $student['assignments'] = $student['can_view_progress'] ? self::assignments_for_student($student['user_id'], $published_paths, $student['class_id']) : []; $rows[] = $student; $total_completed += $student['metrics']['completed']; if ($student['metrics']['last']) $active_students++; }
         $selected_id = isset($_GET['student']) ? absint($_GET['student']) : 0; $selected = null;
-        foreach ($rows as $row) if ((int)$row['user_id'] === $selected_id) { $selected = $row; break; }
+        foreach ($rows as $row) if ((int)$row['user_id'] === $selected_id && ($row['can_view_progress'] || $row['can_view_evidence'])) { $selected = $row; break; }
         $reviews = $selected ? self::reviews($selected_id) : [];
         $review_notice = isset($_GET['review_notice']) ? sanitize_key(wp_unslash($_GET['review_notice'])) : '';
         $path_notice = isset($_GET['path_notice']) ? sanitize_key(wp_unslash($_GET['path_notice'])) : '';
         $class_notice = isset($_GET['class_notice']) ? sanitize_key(wp_unslash($_GET['class_notice'])) : '';
+        $staff_notice = isset($_GET['staff_notice']) ? sanitize_key(wp_unslash($_GET['staff_notice'])) : '';
         $edit_path_id = isset($_GET['edit_path']) ? sanitize_text_field(wp_unslash($_GET['edit_path'])) : '';
         $edit_path = $edit_path_id !== '' ? self::find_teacher_path($user->ID, $edit_path_id) : null;
         $builder = wp_parse_args((array)$edit_path, ['id'=>'','title'=>'','standard'=>'','grade_level'=>'','objectives'=>'','prerequisites'=>'','mastery_threshold'=>80,'target_type'=>'class','target_id'=>(int)($classes[0]['id'] ?? 0),'due_date'=>'','lesson_ids'=>[],'branches'=>[],'pretest'=>[],'evidence_requirements'=>'','posttest'=>[],'reassessment'=>'','extension_activity'=>'','status'=>'draft']);
@@ -436,7 +443,7 @@ PROMPT;
         ob_start(); ?>
         <div class="mb-teacher-dashboard">
             <header class="mb-teacher-hero"><div><span>Teacher workspace</span><h1>Welcome, <?php echo esc_html($user->display_name ?: $user->user_login); ?></h1><p>See class enrollment and real MathBinder activity in one place.</p></div><a href="<?php echo esc_url(home_url('/mathbinder-account/')); ?>">Account &amp; Workspaces</a></header>
-            <nav class="mb-teacher-nav" aria-label="Teacher dashboard sections"><a class="is-active" href="#overview">Overview</a><a href="#classes">My Classes</a><a href="#roster">Student Progress</a><a href="#mastery-paths">Mastery Paths</a><a href="#evidence">Evidence</a><a href="#canvas">Canvas</a></nav>
+            <nav class="mb-teacher-nav" aria-label="Teacher dashboard sections"><a class="is-active" href="#overview">Overview</a><a href="#classes">My Classes</a><a href="#class-staff">Class Staff</a><a href="#roster">Student Progress</a><a href="#mastery-paths">Mastery Paths</a><a href="#evidence">Evidence</a><a href="#canvas">Canvas</a></nav>
             <section id="overview" class="mb-teacher-stats">
                 <article><small>Active classes</small><strong><?php echo count($classes); ?></strong><span>Assigned to this workspace</span></article>
                 <article><small>Enrolled students</small><strong><?php echo count($students); ?></strong><span>Across your classes</span></article>
@@ -449,6 +456,7 @@ PROMPT;
                 <?php else: ?><div class="mb-teacher-class-grid"><?php foreach ($classes as $class): $profile=$class_profiles[(string)$class['id']] ?? []; $join_url=add_query_arg('class_code',$class['class_code'],home_url('/student-dashboard/')); ?><article><span><?php echo esc_html($class['section_name'] ?: ($profile['subject'] ?? 'Class')); ?></span><h3><?php echo esc_html($class['name']); ?></h3><p><?php echo esc_html(trim(($profile['subject'] ?? '').' · '.($profile['grade_level'] ?? ''), ' ·')); ?></p><p>Class code: <strong><?php echo esc_html($class['class_code']); ?></strong></p><div class="mb-class-actions"><a href="<?php echo esc_url($join_url); ?>">Enrollment link</a><details><summary>Invite student</summary><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="mb_teacher_invite_student"><input type="hidden" name="class_id" value="<?php echo absint($class['id']); ?>"><?php wp_nonce_field('mb_teacher_invite_student','mb_teacher_invite_nonce'); ?><label>Student email<input type="email" name="student_email" required></label><button type="submit">Add or Invite</button></form></details><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Archive this class?');"><input type="hidden" name="action" value="mb_teacher_class_status"><input type="hidden" name="class_id" value="<?php echo absint($class['id']); ?>"><?php wp_nonce_field('mb_teacher_class_status','mb_teacher_class_status_nonce'); ?><button class="mb-link-button" type="submit">Archive</button></form></div></article><?php endforeach; ?></div><?php endif; ?>
                 <details id="create-class" class="mb-class-setup" <?php echo !$classes || $class_notice === 'invalid' ? 'open' : ''; ?>><summary>Create a new classroom</summary><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="mb_teacher_create_class"><?php wp_nonce_field('mb_teacher_create_class','mb_teacher_class_nonce'); ?><div class="mb-class-form-grid"><label>Class name<input type="text" name="class_name" maxlength="190" required placeholder="Example: Period 2 Math"></label><label>Section (optional)<input type="text" name="section_name" maxlength="120" placeholder="Example: Room 4 or Tuesday/Thursday"></label><label>Subject<input type="text" name="subject" maxlength="100" required value="Mathematics"></label><label>Grade level<input type="text" name="grade_level" maxlength="80" required placeholder="Example: Grades 7–8"></label><label>School year or term<input type="text" name="school_year" maxlength="120" required value="2026–2027"></label><?php if ($organizations): ?><label>Organization<select name="organization_id"><option value="0">Independent teacher workspace</option><?php foreach($organizations as $organization): ?><option value="<?php echo absint($organization['id']); ?>"><?php echo esc_html($organization['name']); ?></option><?php endforeach; ?></select></label><?php endif; ?><label>Enrollment setting<select name="enrollment_mode"><option value="code">Students may join with class code</option><option value="approval">Teacher approval required</option><option value="closed">Invitations only</option></select></label></div><button class="mb-teacher-primary" type="submit">Create Classroom</button></form></details>
             </section>
+            <?php echo MathBinder_Class_Staff::dashboard_section($classes, $staff_notice); ?>
             <section id="roster" class="mb-teacher-panel"><div class="mb-teacher-heading mb-teacher-heading-actions"><div><small>Real student data</small><h2>Student Progress</h2></div><a class="mb-teacher-export" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=mb_teacher_progress_export'), 'mb_teacher_progress_export')); ?>">Export CSV</a></div>
                 <?php if (!$students): ?><div class="mb-teacher-empty"><strong>No active students are enrolled.</strong><p>Students will appear after they are enrolled in one of your assigned classes.</p></div>
                 <?php else: ?><div class="mb-teacher-filters"><label>Find a student<input type="search" placeholder="Search by name or email" data-mb-roster-search></label><label>Class<select data-mb-roster-class><option value="">All classes</option><?php foreach ($classes as $class): ?><option value="<?php echo absint($class['id']); ?>"><?php echo esc_html($class['name'].($class['section_name'] ? ' · '.$class['section_name'] : '')); ?></option><?php endforeach; ?></select></label><label>Status<select data-mb-roster-status><option value="">All activity</option><option value="active">Has activity</option><option value="inactive">No activity</option><option value="past-due">Past due</option></select></label></div><div class="mb-teacher-table-wrap"><table><thead><tr><th>Student</th><th>Class</th><th>Assignments</th><th>Completed</th><th>Last activity</th><th>Details</th></tr></thead><tbody data-mb-roster><?php foreach ($rows as $row): $past_due=(bool)array_filter($row['assignments'],function($item){return $item['status']==='Past due';}); ?><tr data-name="<?php echo esc_attr(strtolower($row['display_name'].' '.$row['user_email'])); ?>" data-class="<?php echo absint($row['class_id']); ?>" data-activity="<?php echo $row['metrics']['last']?'active':'inactive'; ?>" data-past-due="<?php echo $past_due?'1':'0'; ?>"><td><strong><?php echo esc_html($row['display_name']); ?></strong><small><?php echo esc_html($row['user_email']); ?></small></td><td><?php echo esc_html($row['class_name'].($row['section_name'] ? ' · '.$row['section_name'] : '')); ?></td><td><?php echo count($row['assignments']); ?></td><td><?php echo intval($row['metrics']['completed']); ?><small><?php echo intval($row['metrics']['notes']); ?> saved note(s)</small></td><td><?php echo $row['metrics']['last'] ? esc_html(wp_date(get_option('date_format'), strtotime($row['metrics']['last']))) : 'No activity yet'; ?></td><td><a href="<?php echo esc_url(add_query_arg('student', $row['user_id'], get_permalink()).'#student-details'); ?>">View progress</a></td></tr><?php endforeach; ?></tbody></table><p class="mb-teacher-no-results" data-mb-roster-empty hidden>No students match these filters.</p></div><?php endif; ?>

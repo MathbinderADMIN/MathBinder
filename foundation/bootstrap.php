@@ -10,6 +10,7 @@ function mathbinder_foundation_bootstrap() {
     MathBinder_Student_Dashboard::register();
     MathBinder_Teacher_Dashboard::register();
     MathBinder_External_Practice::register();
+    MathBinder_Class_Staff::register();
     MathBinder_Identity_Service::register();
     MathBinder_Verification_Service::register();
     MathBinder_Account_Workspace::register();
@@ -30,6 +31,7 @@ function mathbinder_foundation_activate() {
     MathBinder_Identity_Service::install();
     MathBinder_Student_Dashboard::ensure_page();
     MathBinder_Teacher_Dashboard::ensure_page();
+    MathBinder_Class_Staff::ensure_page();
     MathBinder_Account_Workspace::ensure_page();
     MathBinder_Frontend_Auth::ensure_page();
     MathBinder_Family_Checkout::ensure_page();
@@ -40,6 +42,7 @@ register_activation_hook(dirname(__DIR__) . '/mathbinder-core.php', 'mathbinder_
 function mathbinder_foundation_upgrade() {
     MathBinder_Student_Dashboard::ensure_page();
     MathBinder_Teacher_Dashboard::ensure_page();
+    MathBinder_Class_Staff::ensure_page();
     MathBinder_Account_Workspace::ensure_page();
     MathBinder_Frontend_Auth::ensure_page();
     MathBinder_Family_Checkout::ensure_page();

@@ -21,6 +21,7 @@ final class MathBinder_Capabilities {
             'mb_parent' => ['label'=>'MathBinder Parent', 'dashboard'=>false],
             'mb_teacher' => ['label'=>'MathBinder Teacher', 'dashboard'=>true],
             'mb_school_admin' => ['label'=>'MathBinder School Administrator', 'dashboard'=>true],
+            'mb_class_staff' => ['label'=>'MathBinder Classroom Staff', 'dashboard'=>true],
         ];
         foreach ($mathbinder_roles as $role_name => $definition) {
             add_role($role_name, $definition['label'], ['read'=>true]);
