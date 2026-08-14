@@ -67,6 +67,7 @@ final class MathBinder_Student_Dashboard {
         if (!is_array($preferences)) $preferences = ['title'=>'My MathBinder','theme'=>'teal','stickers'=>[]];
 
         $coverage = MathBinder_Student_Access::coverage($user_id);
+        $classes = self::student_classes($user_id);
         return [
             'is_fixture' => false,
             'student_name' => $name,
@@ -76,6 +77,7 @@ final class MathBinder_Student_Dashboard {
             'assignments' => $assignments,
             'preferences' => wp_parse_args($preferences, ['title'=>'My MathBinder','theme'=>'teal','stickers'=>[]]),
             'access' => $coverage,
+            'classes' => $classes,
             'mastery_path' => [
                 'title' => 'Your Learning',
                 'subtitle' => 'Choose a topic and MathBinder will keep your place.',
@@ -91,6 +93,30 @@ final class MathBinder_Student_Dashboard {
             "SELECT class_id FROM {$wpdb->prefix}mb_enrollments WHERE user_id=%d AND role_key='student' AND status='active'",
             absint($user_id)
         )) ?: []);
+    }
+
+    private static function student_classes($user_id) {
+        global $wpdb;
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT c.id,c.name,c.section_name,c.teacher_user_id,c.term_id,c.class_code,t.name AS term_name,u.display_name AS teacher_name
+             FROM {$wpdb->prefix}mb_enrollments e
+             JOIN {$wpdb->prefix}mb_classes c ON c.id=e.class_id AND c.status='active'
+             LEFT JOIN {$wpdb->prefix}mb_terms t ON t.id=c.term_id
+             LEFT JOIN {$wpdb->users} u ON u.ID=c.teacher_user_id
+             WHERE e.user_id=%d AND e.role_key='student' AND e.status='active'
+             ORDER BY c.name,c.section_name,c.id",
+            absint($user_id)
+        ), ARRAY_A) ?: [];
+        $profiles = get_option('mb_teacher_class_profiles_v1', []);
+        if (!is_array($profiles)) $profiles = [];
+        foreach ($rows as &$row) {
+            $profile = $profiles[(string)$row['id']] ?? [];
+            $row['subject'] = sanitize_text_field($profile['subject'] ?? 'Mathematics');
+            $row['grade_level'] = sanitize_text_field($profile['grade_level'] ?? '');
+            $row['school_year'] = sanitize_text_field($profile['school_year'] ?? ($row['term_name'] ?? ''));
+        }
+        unset($row);
+        return $rows;
     }
 
     private static function assigned_paths($user_id) {
@@ -154,7 +180,11 @@ final class MathBinder_Student_Dashboard {
 
         $data = self::data_for_user(get_current_user_id());
         $assignments = $data['assignments'];
-        $class_ids = self::student_class_ids(get_current_user_id());
+        $classes = $data['classes'];
+        $class_ids = array_map('absint', wp_list_pluck($classes, 'id'));
+        $selected_class_id = isset($_GET['class_id']) ? absint($_GET['class_id']) : 0;
+        $selected_class = null;
+        foreach ($classes as $class) if ((int)$class['id'] === $selected_class_id) $selected_class = $class;
         $mastery_lessons = $assignments ? $assignments[0]['lessons'] : [];
         $activity_json = wp_json_encode($data['activity']);
         ob_start();
@@ -244,7 +274,18 @@ final class MathBinder_Student_Dashboard {
                 </section>
 
                 <section class="mb-panel mb-join-class-panel" aria-labelledby="mb-join-class-heading">
-                    <div class="mb-panel-heading"><div><span class="mb-eyebrow">School learning</span><h2 id="mb-join-class-heading">Join a Class</h2></div><strong><?php echo count($class_ids); ?> joined</strong></div>
+                    <div class="mb-panel-heading"><div><span class="mb-eyebrow">School learning</span><h2 id="mb-join-class-heading">My Classes</h2></div><strong><?php echo count($class_ids); ?> joined</strong></div>
+                    <?php if ($classes): ?><div class="mb-student-class-grid">
+                        <?php foreach ($classes as $class): $class_url=add_query_arg('class_id',absint($class['id']),get_permalink()).'#mb-student-classroom'; ?>
+                            <article class="mb-student-class-card">
+                                <span><?php echo esc_html($class['subject']); ?></span>
+                                <h3><?php echo esc_html($class['name']); ?></h3>
+                                <?php if ($class['section_name']): ?><p><?php echo esc_html($class['section_name']); ?></p><?php endif; ?>
+                                <dl><div><dt>Teacher</dt><dd><?php echo esc_html($class['teacher_name'] ?: 'Your teacher'); ?></dd></div><?php if ($class['grade_level']): ?><div><dt>Grade</dt><dd><?php echo esc_html($class['grade_level']); ?></dd></div><?php endif; ?><?php if ($class['school_year']): ?><div><dt>Term</dt><dd><?php echo esc_html($class['school_year']); ?></dd></div><?php endif; ?></dl>
+                                <a class="mb-button mb-button-primary" href="<?php echo esc_url($class_url); ?>">Go to Class <span aria-hidden="true">→</span></a>
+                            </article>
+                        <?php endforeach; ?>
+                    </div><?php else: ?><div class="mb-dashboard-empty"><strong>You have not joined a class yet.</strong><p>Enter the class code from your teacher below.</p></div><?php endif; ?>
                     <p class="mb-panel-copy">Enter the class code from your teacher. Assigned learning will appear here automatically.</p>
                     <form data-mb-join-class data-join-url="<?php echo esc_url(rest_url('mathbinder/v1/student/join-class')); ?>" data-rest-nonce="<?php echo esc_attr(wp_create_nonce('wp_rest')); ?>">
                         <label for="mb-class-code">Class code</label>
@@ -252,6 +293,15 @@ final class MathBinder_Student_Dashboard {
                         <p data-mb-join-status aria-live="polite"></p>
                     </form>
                 </section>
+
+                <?php if ($selected_class): $class_assignments=array_values(array_filter($assignments,function($path)use($selected_class_id){return ($path['target_type']??'')==='class' && absint($path['target_id']??0)===$selected_class_id;})); ?>
+                <section id="mb-student-classroom" class="mb-panel mb-student-classroom" aria-labelledby="mb-student-classroom-title">
+                    <div class="mb-student-classroom-header"><div><span class="mb-eyebrow"><?php echo esc_html($selected_class['subject']); ?></span><h2 id="mb-student-classroom-title"><?php echo esc_html($selected_class['name']); ?></h2><p><?php echo esc_html(trim(($selected_class['section_name']?:'').' · '.($selected_class['teacher_name']?:'Your teacher'),' ·')); ?></p></div><a href="<?php echo esc_url(remove_query_arg('class_id',get_permalink()).'#mb-join-class-heading'); ?>">Back to all classes</a></div>
+                    <?php if (!$class_assignments): ?><div class="mb-dashboard-empty"><strong>No class learning has been assigned yet.</strong><p>You still have full access to every published Binder Topic while your teacher prepares your class learning.</p><a class="mb-button mb-button-primary" href="<?php echo esc_url(home_url('/binder-topics/')); ?>">Explore Binder Topics <span aria-hidden="true">→</span></a></div><?php else: ?><div class="mb-assignment-grid">
+                        <?php foreach ($class_assignments as $path): ?><article class="mb-assignment-card"><span><?php echo esc_html($path['teacher_name'] ?: 'Your teacher'); ?></span><h3><?php echo esc_html($path['title']); ?></h3><p><?php echo esc_html($path['objectives']); ?></p><?php if (!empty($path['lessons'])): ?><a class="mb-button mb-button-primary" href="<?php echo esc_url($path['lessons'][0]['url']); ?>">Start assignment <span aria-hidden="true">→</span></a><?php endif; ?></article><?php endforeach; ?>
+                    </div><?php endif; ?>
+                </section>
+                <?php endif; ?>
 
                 <section class="mb-dashboard-grid mb-achievement-grid">
                     <article class="mb-panel"><div class="mb-panel-heading"><div><span class="mb-eyebrow">Mastery progress</span><h2>Skills Mastered</h2></div><strong data-mb-mastered-count>0</strong></div><p class="mb-panel-copy" data-mb-mastery-average>No mastery checks completed yet.</p></article>

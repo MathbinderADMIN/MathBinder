@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 30.32.0
+ * Version: 30.35.0
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -57,7 +57,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '30.32.0';
+    const VERSION = '30.35.0';
 
     private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
@@ -4917,7 +4917,7 @@ final class MathBinder_Core {
             }
         }
 
-        
+
         $index = get_page_by_path('binder-topics');
         if ($index) {
             wp_update_post([

@@ -24,8 +24,8 @@ final class MathBinder_Frontend_Auth {
         add_filter('register_url', [__CLASS__, 'disable_public_registration_link']);
         add_filter('pre_option_users_can_register', [__CLASS__, 'public_registration_disabled']);
         add_filter('login_redirect', [__CLASS__, 'native_login_redirect'], 20, 3);
-        add_action('admin_init', [__CLASS__, 'restrict_student_admin'], 1);
-        add_filter('show_admin_bar', [__CLASS__, 'student_admin_bar']);
+        add_action('admin_init', [__CLASS__, 'restrict_frontend_account_admin'], 1);
+        add_filter('show_admin_bar', [__CLASS__, 'frontend_account_admin_bar']);
     }
 
     public static function ensure_page() {
@@ -241,8 +241,8 @@ final class MathBinder_Frontend_Auth {
      * when they sign in through WordPress's native wp-login.php form.
      */
     public static function native_login_redirect($redirect_to, $requested_redirect_to, $user) {
-        if ($user instanceof WP_User && self::is_student($user)) {
-            return self::page_url(['student-dashboard']);
+        if ($user instanceof WP_User && self::is_frontend_only_account($user)) {
+            return self::role_destination($user);
         }
         return $redirect_to;
     }
@@ -252,8 +252,8 @@ final class MathBinder_Frontend_Auth {
      * Requests used by front-end forms and background services must continue
      * to reach admin-post.php and admin-ajax.php.
      */
-    public static function restrict_student_admin() {
-        if (!is_user_logged_in() || !self::is_student(wp_get_current_user())) return;
+    public static function restrict_frontend_account_admin() {
+        if (!is_user_logged_in() || !self::is_frontend_only_account(wp_get_current_user())) return;
         if ((function_exists('wp_doing_ajax') && wp_doing_ajax()) ||
             (defined('DOING_CRON') && DOING_CRON) ||
             (defined('WP_CLI') && WP_CLI)) return;
@@ -261,12 +261,20 @@ final class MathBinder_Frontend_Auth {
         global $pagenow;
         if (in_array($pagenow, ['admin-post.php', 'admin-ajax.php'], true)) return;
 
-        wp_safe_redirect(self::page_url(['student-dashboard']));
+        wp_safe_redirect(self::role_destination(wp_get_current_user()));
         exit;
     }
 
-    public static function student_admin_bar($show) {
-        return self::is_student(wp_get_current_user()) ? false : $show;
+    public static function frontend_account_admin_bar($show) {
+        return self::is_frontend_only_account(wp_get_current_user()) ? false : $show;
+    }
+
+    private static function is_frontend_only_account($user) {
+        if (!($user instanceof WP_User) || user_can($user, 'manage_options')) return false;
+        return (bool) array_intersect(
+            ['mb_student', 'mb_teacher', 'mb_class_staff', 'mb_parent'],
+            (array) $user->roles
+        );
     }
 
     private static function is_student($user) {
