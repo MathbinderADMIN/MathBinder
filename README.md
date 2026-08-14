@@ -2,7 +2,11 @@
 
 Store packaged release ZIPs here after source changes are reviewed and tested.
 
-Current implementation baseline: **MathBinder Core 30.35.0 / MathBinder Theme 1.0.0**.
+Current implementation baseline: **MathBinder Core 30.36.1 / MathBinder Theme 1.0.0**.
+
+Core 30.36.1 expands My Math Notes with hierarchical main categories and subcategories, an insertable math-symbol palette, a saved drawing canvas, and direct access to the Desmos scientific and graphing calculators. Drawings and organization fields are preserved in deliberate, versioned teacher submissions and Canvas preview snapshots.
+
+Core 30.36.0 adds server-backed, customizable student math notes organized by topic, unit of study, California standard, or I Can statement. Notes remain private drafts until a student deliberately submits a locked version. Teachers can review submitted snapshots, provide feedback, request revisions, and grade by points, percentage, completion, or rubric. Canvas preparation creates a preview-only queue record; it does not transmit student work or grades. Live Canvas and SpeedGrader delivery remains reserved for a separately approved integration release.
 
 Core 30.35.0 adds Teacher Roster and Staff Management. Authorized teachers and delegated staff with the remove-students permission can remove an active student enrollment from one selected class after confirmation. Primary teachers and administrators can also remove co-teachers, substitutes, and aides from a selected class. Removal immediately ends only that class membership or delegated access while preserving each account, saved student work, other class enrollments, and audit history. Pending staff invitations are revoked, every removal is recorded, and either person can be invited again later.
 

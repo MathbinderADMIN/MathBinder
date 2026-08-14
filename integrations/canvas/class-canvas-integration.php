@@ -71,4 +71,26 @@ final class MathBinder_Canvas_Integration {
         update_option(self::QUEUE_OPTION, $queue, false);
         return $queue[$record_id];
     }
+
+    public static function prepare_note_submission(array $note, $student_id, $teacher_id) {
+        $snapshot = (array)($note['submitted_snapshot'] ?? []);
+        $note_id = sanitize_key((string)($note['id'] ?? ''));
+        if ($note_id === '' || !$snapshot) return new WP_Error('mb_canvas_missing_note', 'A submitted MathBinder note snapshot is required.');
+        $queue = self::queue();
+        $record_id = 'note:' . $note_id;
+        $existing = (array)($queue[$record_id] ?? []);
+        $queue[$record_id] = [
+            'id'=>$record_id, 'mathbinder_type'=>'math_note_submission', 'mathbinder_id'=>$note_id,
+            'student_id'=>absint($student_id), 'teacher_id'=>absint($teacher_id), 'class_id'=>absint($snapshot['class_id'] ?? 0),
+            'title'=>sanitize_text_field((string)($snapshot['title'] ?? 'MathBinder Notes')),
+            'canvas_assignment'=>sanitize_text_field((string)($snapshot['canvas_assignment'] ?? '')),
+            'snapshot_version'=>absint($snapshot['version'] ?? 1), 'submission_preview'=>$snapshot,
+            'grade_preview'=>(array)($note['review'] ?? []), 'status'=>'preview_only',
+            'external_submission_id'=>'', 'external_line_item_id'=>'',
+            'created_at'=>(string)($existing['created_at'] ?? current_time('mysql', true)), 'updated_at'=>current_time('mysql', true),
+        ];
+        update_option(self::QUEUE_OPTION, $queue, false);
+        MathBinder_Audit_Log::record('prepare_canvas_note_preview', 'user', absint($student_id), ['note_id'=>$note_id,'version'=>absint($snapshot['version'] ?? 1),'sent'=>false]);
+        return $queue[$record_id];
+    }
 }

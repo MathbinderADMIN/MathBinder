@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 30.35.0
+ * Version: 30.36.1
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -27,6 +27,7 @@ require_once __DIR__ . '/foundation/class-audit-log.php';
 require_once __DIR__ . '/foundation/class-rest-controller.php';
 require_once __DIR__ . '/foundation/class-student-dashboard.php';
 require_once __DIR__ . '/foundation/class-teacher-dashboard.php';
+require_once __DIR__ . '/foundation/class-math-notes.php';
 require_once __DIR__ . '/foundation/class-external-practice.php';
 require_once __DIR__ . '/foundation/class-class-staff.php';
 require_once __DIR__ . '/identity/class-identity-service.php';
@@ -57,7 +58,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '30.35.0';
+    const VERSION = '30.36.1';
 
     private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
