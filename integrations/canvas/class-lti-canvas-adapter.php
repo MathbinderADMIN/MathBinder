@@ -15,6 +15,13 @@ final class MathBinder_LTI_Canvas_Adapter implements MathBinder_Canvas_Adapter {
         if(is_wp_error($claims)) return $claims;
         $message=$claims['https://purl.imsglobal.org/spec/lti/claim/message_type']??'';
         if(!in_array($message,['LtiResourceLinkRequest','LtiDeepLinkingRequest'],true)) return new WP_Error('mb_lti_message','This Canvas launch type is not supported.');
+        if(($claims['https://purl.imsglobal.org/spec/lti/claim/version']??'')!=='1.3.0') return new WP_Error('mb_lti_version','Canvas launch must use LTI version 1.3.0.');
+        $target=esc_url_raw((string)($claims['https://purl.imsglobal.org/spec/lti/claim/target_link_uri']??''));
+        if($target===''||empty($saved['target'])||!hash_equals((string)$saved['target'],$target)) return new WP_Error('mb_lti_target','Canvas target-link claim does not match the initiated launch.');
+        if(!empty($saved['issuer'])&&!hash_equals((string)$saved['issuer'],rtrim((string)($claims['iss']??''),'/'))) return new WP_Error('mb_lti_state_issuer','Canvas issuer changed during the launch.');
+        if(!empty($saved['client_id'])&&!in_array((string)$saved['client_id'],array_map('strval',(array)($claims['aud']??[])),true)) return new WP_Error('mb_lti_state_client','Canvas client changed during the launch.');
+        if($message==='LtiResourceLinkRequest'&&empty($claims['https://purl.imsglobal.org/spec/lti/claim/resource_link']['id'])) return new WP_Error('mb_lti_resource','Canvas resource-link launch is missing its resource ID.');
+        if($message==='LtiDeepLinkingRequest'&&empty($claims['https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings']['deep_link_return_url'])) return new WP_Error('mb_lti_deep_link','Canvas Deep Linking launch is missing its return URL.');
         return ['claims'=>$claims,'message_type'=>$message,'roles'=>(array)($claims['https://purl.imsglobal.org/spec/lti/claim/roles']??[]),'context'=>(array)($claims['https://purl.imsglobal.org/spec/lti/claim/context']??[]),'resource_link'=>(array)($claims['https://purl.imsglobal.org/spec/lti/claim/resource_link']??[]),'services'=>['ags'=>(array)($claims['https://purl.imsglobal.org/spec/lti-ags/claim/endpoint']??[]),'nrps'=>(array)($claims['https://purl.imsglobal.org/spec/lti-nrps/claim/namesroleservice']??[])]];
     }
     public function sync_roster($context_id){ return $this->service_get((string)$context_id,['https://purl.imsglobal.org/spec/lti-nrps/scope/contextmembership.readonly']); }
@@ -36,7 +43,7 @@ final class MathBinder_LTI_Canvas_Adapter implements MathBinder_Canvas_Adapter {
 
     private function service_get($url,array $scopes){ return $this->service_request($url,'GET',null,$scopes); }
     private function service_request($url,$method,$body,array $scopes){
-        if(stripos($url,rtrim($this->settings['canvas_url'],'/'))!==0) return new WP_Error('mb_canvas_service_host','Canvas service URL does not match the configured instance.');
+        if(!$this->trusted_service_url($url)) return new WP_Error('mb_canvas_service_host','Canvas service URL does not match the configured instance.');
         $token=$this->access_token($scopes); if(is_wp_error($token))return $token;
         $args=['timeout'=>30,'redirection'=>0,'method'=>$method,'headers'=>['Authorization'=>'Bearer '.$token,'Accept'=>'application/json']];
         if($body!==null){$args['headers']['Content-Type']=in_array('https://purl.imsglobal.org/spec/lti-ags/scope/score',$scopes,true)?'application/vnd.ims.lis.v1.score+json':'application/vnd.ims.lis.v2.lineitem+json';$args['body']=wp_json_encode($body);}
@@ -53,4 +60,5 @@ final class MathBinder_LTI_Canvas_Adapter implements MathBinder_Canvas_Adapter {
         if(wp_remote_retrieve_response_code($response)!==200||empty($body['access_token']))return new WP_Error('mb_canvas_token','Canvas service authorization failed.');
         set_transient($cache_key,$body['access_token'],max(60,(int)($body['expires_in']??3600)-60));return $body['access_token'];
     }
+    private function trusted_service_url($url){$service=wp_parse_url($url);$canvas=wp_parse_url($this->settings['canvas_url']);return is_array($service)&&is_array($canvas)&&strtolower((string)($service['scheme']??''))==='https'&&strtolower((string)($service['host']??''))===strtolower((string)($canvas['host']??''))&&absint($service['port']??443)===absint($canvas['port']??443);}
 }

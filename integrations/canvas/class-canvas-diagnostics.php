@@ -18,15 +18,17 @@ final class MathBinder_Canvas_Diagnostics {
         $s = MathBinder_Canvas_Settings::get();
         $config = MathBinder_Canvas_Transport::config();
         $jwk = json_decode((string)($s['public_jwk'] ?? ''), true);
-        $private_ok = !empty($s['private_key']) && strpos((string)$s['private_key'], '-----BEGIN PRIVATE KEY-----') !== false;
+        $private_ok = !empty($s['private_key']) && (strpos((string)$s['private_key'], '-----BEGIN PRIVATE KEY-----') !== false || strpos((string)$s['private_key'], '-----BEGIN RSA PRIVATE KEY-----') !== false);
         $tests = [
             self::test('wordpress_https', 'MathBinder site uses HTTPS', is_ssl(), is_ssl() ? 'HTTPS detected.' : 'HTTPS is required before an LTI deployment can be authorized.'),
             self::test('openssl', 'OpenSSL signing and verification available', function_exists('openssl_sign') && function_exists('openssl_verify'), 'Required for RS256 launch verification and service authorization.'),
             self::test('configuration', 'Required deployment fields complete', MathBinder_Canvas_Settings::is_complete($s), 'No secret values are included in this report.'),
-            self::test('mode', 'Operating mode is fail-closed', in_array(($s['operating_mode'] ?? 'disabled'), ['disabled','sandbox'], true), 'Core 30.37.0 permits gated sandbox transmission; production remains locked until certification.'),
+            self::test('platform_issuer', 'Canvas platform issuer is configured separately', !empty($s['platform_issuer']) && stripos((string)$s['platform_issuer'],'https://')===0, 'Hosted Canvas normally uses https://canvas.instructure.com even when the school has a custom Canvas domain.'),
+            self::test('mode', 'Operating mode is fail-closed', in_array(($s['operating_mode'] ?? 'disabled'), ['disabled','sandbox'], true), 'Core 30.49.0 permits gated sandbox transmission; production remains locked until certification.'),
             self::test('validation', 'Configuration has been locally validated', !empty($s['validated_at']), !empty($s['validated_at']) ? 'Validated at ' . $s['validated_at'] . ' UTC.' : 'Run local validation after saving settings.'),
             self::test('private_key', 'MathBinder private key format recognized', $private_ok, 'The private key itself is never shown.'),
             self::test('public_jwk', 'Public JWK is an RSA signing key', is_array($jwk) && ($jwk['kty'] ?? '') === 'RSA' && !empty($jwk['kid']) && !empty($jwk['n']) && !empty($jwk['e']), 'Canvas uses the matching public key to verify MathBinder messages.'),
+            self::test('key_pair', 'Private key matches the public JWK', self::key_pair_matches($s,$jwk), 'MathBinder signs with the private key; Canvas verifies with the public JWK.'),
             self::test('registration', 'Canvas registration document is complete', !empty($config['oidc_initiation_url']) && !empty($config['target_link_uri']) && !empty($config['public_jwk_url']) && count((array)($config['scopes'] ?? [])) >= 3, 'OIDC, launch, JWKS, AGS, and NRPS declarations checked.'),
             self::test('homework_submission', 'Homework Submission placement is declared', strpos(wp_json_encode($config),'homework_submission')!==false, 'Students select locked MathBinder snapshots through Canvas Deep Linking.'),
             self::test('adapter', 'Authenticated LTI adapter installed', MathBinder_Canvas_Transport::adapter_ready(), 'Adapter availability does not by itself enable transmission.'),
@@ -62,7 +64,7 @@ final class MathBinder_Canvas_Diagnostics {
         self::authorize('mathbinder_canvas_preview_launch');
         $s = MathBinder_Canvas_Settings::get();
         $claims = [
-            'iss'=>rtrim((string)$s['canvas_url'], '/'),
+            'iss'=>rtrim((string)($s['platform_issuer']??$s['canvas_url']), '/'),
             'aud'=>(string)$s['client_id'],
             'sub'=>'preview-user-' . substr(hash('sha256', (string)get_current_user_id()), 0, 10),
             'https://purl.imsglobal.org/spec/lti/claim/deployment_id'=>(string)$s['deployment_id'],
@@ -72,7 +74,7 @@ final class MathBinder_Canvas_Diagnostics {
             'https://purl.imsglobal.org/spec/lti/claim/context'=>['id'=>'preview-course','label'=>'PREVIEW','title'=>'MathBinder Canvas Preview'],
         ];
         $checks = [
-            self::test('issuer', 'Issuer matches saved Canvas instance', $claims['iss'] !== '' && $claims['iss'] === rtrim((string)$s['canvas_url'], '/'), 'Synthetic claim only.'),
+            self::test('issuer', 'Issuer matches saved Canvas platform issuer', $claims['iss'] !== '' && $claims['iss'] === rtrim((string)($s['platform_issuer']??$s['canvas_url']), '/'), 'Synthetic claim only.'),
             self::test('audience', 'Audience matches client ID', $claims['aud'] !== '' && $claims['aud'] === (string)$s['client_id'], 'Synthetic claim only.'),
             self::test('deployment', 'Deployment claim matches', $claims['https://purl.imsglobal.org/spec/lti/claim/deployment_id'] !== '' && $claims['https://purl.imsglobal.org/spec/lti/claim/deployment_id'] === (string)$s['deployment_id'], 'Synthetic claim only.'),
             self::test('message', 'Resource-link message supported', true, 'LtiResourceLinkRequest'),
@@ -146,6 +148,13 @@ final class MathBinder_Canvas_Diagnostics {
         if ($mode === 'disabled') return empty($s['sandbox_enabled']);
         if ($mode !== 'sandbox') return false;
         return empty($s['sandbox_enabled']) || (!empty($s['validated_at']) && MathBinder_Canvas_Settings::is_complete($s));
+    }
+
+    private static function key_pair_matches(array $settings,$jwk) {
+        if(!is_array($jwk)||empty($settings['private_key'])||empty($jwk['n'])||empty($jwk['e'])||!function_exists('openssl_pkey_get_private'))return false;
+        $resource=openssl_pkey_get_private($settings['private_key']);if(!$resource)return false;
+        $details=openssl_pkey_get_details($resource);if(!is_array($details)||empty($details['rsa']['n'])||empty($details['rsa']['e']))return false;
+        return hash_equals((string)$jwk['n'],MathBinder_Canvas_Crypto::b64url_encode($details['rsa']['n']))&&hash_equals((string)$jwk['e'],MathBinder_Canvas_Crypto::b64url_encode($details['rsa']['e']));
     }
 
     private static function record($type, array $summary, array $tests) {

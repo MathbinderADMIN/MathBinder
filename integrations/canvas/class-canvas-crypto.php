@@ -28,11 +28,14 @@ final class MathBinder_Canvas_Crypto {
         if (is_wp_error($pem)) return $pem;
         if (openssl_verify($decoded['signed'], $decoded['signature'], $pem, OPENSSL_ALGO_SHA256) !== 1) return new WP_Error('mb_lti_signature', 'Canvas launch signature verification failed.');
         $c = $decoded['claims']; $now = time();
-        if (($c['iss'] ?? '') !== rtrim($settings['canvas_url'], '/')) return new WP_Error('mb_lti_issuer', 'Canvas issuer does not match this deployment.');
+        $issuer = rtrim((string)($settings['platform_issuer'] ?? $settings['canvas_url'] ?? ''), '/');
+        if ($issuer === '' || !hash_equals($issuer, rtrim((string)($c['iss'] ?? ''), '/'))) return new WP_Error('mb_lti_issuer', 'Canvas issuer does not match this deployment.');
         $aud = (array)($c['aud'] ?? []);
         if (!in_array((string)$settings['client_id'], array_map('strval', $aud), true)) return new WP_Error('mb_lti_audience', 'LTI client ID does not match.');
-        if (empty($c['exp']) || (int)$c['exp'] < $now - 30 || (!empty($c['iat']) && (int)$c['iat'] > $now + 60)) return new WP_Error('mb_lti_time', 'The Canvas launch token has expired or is not yet valid.');
-        if ($expected_nonce !== '' && !hash_equals($expected_nonce, (string)($c['nonce'] ?? ''))) return new WP_Error('mb_lti_nonce', 'The Canvas launch nonce does not match.');
+        if (count($aud) > 1 && !hash_equals((string)$settings['client_id'], (string)($c['azp'] ?? ''))) return new WP_Error('mb_lti_authorized_party', 'Canvas authorized-party claim does not match the LTI client.');
+        if (empty($c['exp']) || (int)$c['exp'] < $now - 30 || empty($c['iat']) || (int)$c['iat'] > $now + 60 || (!empty($c['nbf']) && (int)$c['nbf'] > $now + 60)) return new WP_Error('mb_lti_time', 'The Canvas launch token has expired or is not yet valid.');
+        if ($expected_nonce === '' || empty($c['nonce']) || !hash_equals($expected_nonce, (string)$c['nonce'])) return new WP_Error('mb_lti_nonce', 'The Canvas launch nonce does not match.');
+        if (trim((string)($c['sub'] ?? '')) === '') return new WP_Error('mb_lti_subject', 'Canvas launch subject is missing.');
         $deployment = $c['https://purl.imsglobal.org/spec/lti/claim/deployment_id'] ?? '';
         if (!hash_equals((string)$settings['deployment_id'], (string)$deployment)) return new WP_Error('mb_lti_deployment', 'Canvas deployment ID does not match.');
         return $c;

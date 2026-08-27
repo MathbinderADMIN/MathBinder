@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 
 /** Defines the Canvas LTI 1.3 contract without performing network requests. */
 final class MathBinder_Canvas_Protocol {
-    const VERSION = '3.0';
+    const VERSION = '3.1';
 
     public static function services() {
         return [

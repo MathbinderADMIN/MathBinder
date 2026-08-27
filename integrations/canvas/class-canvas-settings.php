@@ -11,6 +11,7 @@ final class MathBinder_Canvas_Settings {
         add_action('admin_menu', [__CLASS__, 'menu']);
         add_action('admin_post_mathbinder_save_canvas_settings', [__CLASS__, 'save']);
         add_action('admin_post_mathbinder_validate_canvas_settings', [__CLASS__, 'validate']);
+        add_action('admin_post_mathbinder_generate_canvas_keys', [__CLASS__, 'generate_keys']);
     }
 
     public static function menu() {
@@ -21,7 +22,7 @@ final class MathBinder_Canvas_Settings {
         $saved = get_option(self::OPTION, []);
         if (!is_array($saved)) $saved = [];
         $saved = wp_parse_args($saved, [
-            'environment' => 'sandbox', 'canvas_url' => '', 'client_id' => '', 'deployment_id' => '',
+            'environment' => 'sandbox', 'canvas_url' => '', 'platform_issuer' => 'https://canvas.instructure.com', 'client_id' => '', 'deployment_id' => '',
             'canvas_jwks_url' => '', 'canvas_auth_url' => '', 'canvas_token_url' => '',
             'private_key' => '', 'public_jwk' => '', 'validated_at' => '', 'sandbox_enabled' => false,
             'operating_mode' => 'disabled',
@@ -32,7 +33,7 @@ final class MathBinder_Canvas_Settings {
 
     public static function is_complete($settings = null) {
         $settings = is_array($settings) ? $settings : self::get();
-        foreach (['canvas_url','client_id','deployment_id','canvas_jwks_url','canvas_auth_url','canvas_token_url','private_key','public_jwk'] as $key) {
+        foreach (['canvas_url','platform_issuer','client_id','deployment_id','canvas_jwks_url','canvas_auth_url','canvas_token_url','private_key','public_jwk'] as $key) {
             if (trim((string)($settings[$key] ?? '')) === '') return false;
         }
         return true;
@@ -44,7 +45,7 @@ final class MathBinder_Canvas_Settings {
         $current = self::get();
         $settings = $current;
         $errors = [];
-        foreach (['canvas_url','canvas_jwks_url','canvas_auth_url','canvas_token_url'] as $key) {
+        foreach (['canvas_url','platform_issuer','canvas_jwks_url','canvas_auth_url','canvas_token_url'] as $key) {
             $value = esc_url_raw(trim((string)wp_unslash($_POST[$key] ?? '')));
             if ($value !== '' && stripos($value, 'https://') !== 0) $errors[] = self::label($key) . ' must use HTTPS.';
             $settings[$key] = $value;
@@ -56,12 +57,12 @@ final class MathBinder_Canvas_Settings {
         if (!empty($_POST['clear_public_jwk'])) $settings['public_jwk'] = '';
         if ($new_private !== '') {
             if (!function_exists('openssl_encrypt')) $errors[] = 'This server must provide OpenSSL before a Canvas private key can be stored.';
-            elseif (strpos($new_private, '-----BEGIN PRIVATE KEY-----') === false) $errors[] = 'The private key must be a PEM private key.';
+            elseif (strpos($new_private, '-----BEGIN PRIVATE KEY-----') === false && strpos($new_private, '-----BEGIN RSA PRIVATE KEY-----') === false) $errors[] = 'The private key must be a PEM private key.';
             else $settings['private_key'] = $new_private;
         }
         if ($new_jwk !== '') {
             $decoded = json_decode($new_jwk, true);
-            if (!is_array($decoded) || empty($decoded['kty'])) $errors[] = 'The public JWK must be valid JSON containing kty.';
+            if (!is_array($decoded) || ($decoded['kty']??'')!=='RSA' || empty($decoded['kid']) || empty($decoded['n']) || empty($decoded['e'])) $errors[] = 'The public JWK must be an RSA signing key containing kid, n, and e.';
             else $settings['public_jwk'] = wp_json_encode($decoded);
         }
         $requested_mode = sanitize_key((string)wp_unslash($_POST['operating_mode'] ?? 'disabled'));
@@ -84,9 +85,11 @@ final class MathBinder_Canvas_Settings {
         $settings = self::get();
         $errors = [];
         if (!self::is_complete($settings)) $errors[] = 'Complete all Canvas sandbox fields before validation.';
-        foreach (['canvas_url','canvas_jwks_url','canvas_auth_url','canvas_token_url'] as $key) {
+        foreach (['canvas_url','platform_issuer','canvas_jwks_url','canvas_auth_url','canvas_token_url'] as $key) {
             if ($settings[$key] !== '' && stripos($settings[$key], 'https://') !== 0) $errors[] = self::label($key) . ' must use HTTPS.';
         }
+        $jwk = json_decode((string)$settings['public_jwk'], true);
+        if (!self::keys_match((string)$settings['private_key'], $jwk)) $errors[] = 'The MathBinder private key does not match the saved public JWK.';
         if ($errors) self::redirect_errors($errors);
         $settings['validated_at'] = current_time('mysql', true);
         $settings['sandbox_enabled'] = ($settings['operating_mode'] ?? 'disabled') === 'sandbox' && !empty($_POST['enable_sandbox']);
@@ -97,9 +100,31 @@ final class MathBinder_Canvas_Settings {
         wp_safe_redirect(add_query_arg('canvas_validated', $settings['sandbox_enabled'] ? 'enabled' : 'ready', self::page_url())); exit;
     }
 
+    public static function generate_keys() {
+        self::authorize();
+        check_admin_referer('mathbinder_generate_canvas_keys', 'mathbinder_canvas_key_nonce');
+        if (!function_exists('openssl_pkey_new') || !function_exists('openssl_pkey_export')) self::redirect_errors(['OpenSSL key generation is unavailable on this server.']);
+        $resource = openssl_pkey_new(['private_key_bits'=>2048, 'private_key_type'=>OPENSSL_KEYTYPE_RSA]);
+        $private = '';
+        if (!$resource || !openssl_pkey_export($resource, $private)) self::redirect_errors(['MathBinder could not generate the Canvas signing key.']);
+        $details = openssl_pkey_get_details($resource);
+        if (!is_array($details) || empty($details['rsa']['n']) || empty($details['rsa']['e'])) self::redirect_errors(['MathBinder could not derive the public Canvas signing key.']);
+        $kid = 'mathbinder-' . gmdate('Ymd') . '-' . substr(wp_generate_password(12, false, false), 0, 12);
+        $jwk = ['kty'=>'RSA','kid'=>$kid,'use'=>'sig','alg'=>'RS256','n'=>MathBinder_Canvas_Crypto::b64url_encode($details['rsa']['n']),'e'=>MathBinder_Canvas_Crypto::b64url_encode($details['rsa']['e'])];
+        $settings = self::get();
+        $settings['private_key'] = $private;
+        $settings['public_jwk'] = wp_json_encode($jwk);
+        $settings['validated_at'] = '';
+        $settings['sandbox_enabled'] = false;
+        $settings['private_key'] = self::seal($settings['private_key']);
+        update_option(self::OPTION, $settings, false);
+        MathBinder_Audit_Log::record('generate', 'canvas_signing_key', 0, ['kid'=>$kid,'algorithm'=>'RS256','sandbox_disabled'=>true]);
+        wp_safe_redirect(add_query_arg('canvas_keys', 'generated', self::page_url())); exit;
+    }
+
     public static function render() {
         if (!current_user_can(MathBinder_Capabilities::MANAGE_INTEGRATIONS)) return;
-        $s = self::get(); $complete = self::is_complete($s); $validated = $s['validated_at'] !== ''; $readiness = MathBinder_Canvas_Protocol::readiness();
+        $s = self::get(); $complete = self::is_complete($s); $validated = $s['validated_at'] !== ''; $readiness = MathBinder_Canvas_Protocol::readiness(); $registration = MathBinder_Canvas_Transport::config();
         $tests = MathBinder_Canvas_Diagnostics::local_tests(); $test_summary = MathBinder_Canvas_Diagnostics::summary($tests);
         $preview = MathBinder_Canvas_Diagnostics::preview(); $history = MathBinder_Canvas_Diagnostics::history();
         $mappings = $complete ? MathBinder_Canvas_Repository::mappings($s) : []; $jobs = $complete ? MathBinder_Canvas_Repository::jobs($s) : [];
@@ -109,29 +134,36 @@ final class MathBinder_Canvas_Settings {
         <div class="wrap"><h1>MathBinder Canvas Sandbox</h1>
             <?php if (isset($_GET['canvas_saved'])): ?><div class="notice notice-success is-dismissible"><p>Canvas sandbox settings saved. No data was sent.</p></div><?php endif; ?>
             <?php if (isset($_GET['canvas_validated'])): ?><div class="notice notice-success is-dismissible"><p><?php echo $_GET['canvas_validated'] === 'enabled' ? 'Sandbox configuration validated and the transmission gate was explicitly enabled. Signed launches and approved mappings are still required.' : 'Sandbox configuration validated. Data transfer remains disabled.'; ?></p></div><?php endif; ?>
+            <?php if (isset($_GET['canvas_keys'])): ?><div class="notice notice-success is-dismissible"><p>A new MathBinder RS256 signing key was generated and stored securely. Revalidate the sandbox before testing a launch.</p></div><?php endif; ?>
             <?php if (isset($_GET['canvas_mapping']) && $_GET['canvas_mapping']==='approved'): ?><div class="notice notice-success is-dismissible"><p>The Canvas mapping was approved. Future signed launches may use this mapping while the sandbox transmission gate is enabled.</p></div><?php endif; ?>
             <?php if (is_array($errors)): foreach ($errors as $error): ?><div class="notice notice-error"><p><?php echo esc_html($error); ?></p></div><?php endforeach; endif; ?>
-            <div class="notice <?php echo $s['sandbox_enabled'] ? 'notice-success' : ($complete ? 'notice-info' : 'notice-warning'); ?> inline"><p><strong><?php echo $s['sandbox_enabled'] ? 'Canvas sandbox transmission gate is enabled.' : ($complete ? 'Configuration is complete but transmission is disabled.' : 'Canvas sandbox is not configured.'); ?></strong></p><p>Core 30.37.0 can return student-selected locked snapshots and teacher-approved test grades only after every gate and mapping is approved. Production transmission remains disabled until the sandbox certification checklist is completed.</p></div>
+            <div class="notice <?php echo $s['sandbox_enabled'] ? 'notice-success' : ($complete ? 'notice-info' : 'notice-warning'); ?> inline"><p><strong><?php echo $s['sandbox_enabled'] ? 'Canvas sandbox transmission gate is enabled.' : ($complete ? 'Configuration is complete but transmission is disabled.' : 'Canvas sandbox is not configured.'); ?></strong></p><p>Core 30.49.0 can return student-selected locked snapshots and teacher-approved test grades only after every gate and mapping is approved. Production transmission remains disabled until the sandbox certification checklist is completed.</p></div>
             <p>Only administrators can view this page. Secret values are never displayed after saving and never appear on a teacher screen.</p>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" autocomplete="off">
                 <input type="hidden" name="action" value="mathbinder_save_canvas_settings"><?php wp_nonce_field(self::NONCE_ACTION, 'mathbinder_canvas_nonce'); ?>
                 <table class="form-table" role="presentation">
                     <tr><th scope="row">Operating mode</th><td><label><input type="radio" name="operating_mode" value="disabled" <?php checked($s['operating_mode'], 'disabled'); ?>> Disabled</label><br><label><input type="radio" name="operating_mode" value="sandbox" <?php checked($s['operating_mode'], 'sandbox'); ?>> Authorized Sandbox / Test</label><br><label><input type="radio" value="live" disabled> Production (locked until sandbox certification)</label><p class="description">Saving a mode never enables transmission. Sandbox also requires validation, the separate activation checkbox, signed launches, and approved course/user mappings.</p></td></tr>
                     <?php self::text_row('canvas_url','Canvas base URL',$s['canvas_url'],'https://school.instructure.com'); ?>
+                    <?php self::text_row('platform_issuer','Canvas platform issuer',$s['platform_issuer'],'https://canvas.instructure.com'); ?>
                     <?php self::text_row('client_id','LTI client ID',$s['client_id'],'Canvas developer key client ID'); ?>
                     <?php self::text_row('deployment_id','LTI deployment ID',$s['deployment_id'],'Canvas deployment ID'); ?>
-                    <?php self::text_row('canvas_jwks_url','Canvas JWKS URL',$s['canvas_jwks_url'],'https://canvas.instructure.com/api/lti/security/jwks'); ?>
-                    <?php self::text_row('canvas_auth_url','Canvas authorization URL',$s['canvas_auth_url'],'https://canvas.instructure.com/api/lti/authorize_redirect'); ?>
+                    <?php self::text_row('canvas_jwks_url','Canvas JWKS URL',$s['canvas_jwks_url'],'https://sso.canvaslms.com/api/lti/security/jwks'); ?>
+                    <?php self::text_row('canvas_auth_url','Canvas authorization URL',$s['canvas_auth_url'],'https://sso.canvaslms.com/api/lti/authorize_redirect'); ?>
                     <?php self::text_row('canvas_token_url','Canvas access-token URL',$s['canvas_token_url'],'https://canvas.instructure.com/login/oauth2/token'); ?>
                     <tr><th scope="row"><label for="mb-canvas-private">MathBinder private key</label></th><td><textarea id="mb-canvas-private" name="private_key" class="large-text code" rows="5" placeholder="<?php echo $s['private_key'] ? 'Stored — leave blank to keep it' : 'Paste PEM private key'; ?>" autocomplete="new-password"></textarea><?php if ($s['private_key']): ?><br><label><input type="checkbox" name="clear_private_key" value="1"> Remove stored private key</label><?php endif; ?></td></tr>
                     <tr><th scope="row"><label for="mb-canvas-jwk">MathBinder public JWK</label></th><td><textarea id="mb-canvas-jwk" name="public_jwk" class="large-text code" rows="5" placeholder="<?php echo $s['public_jwk'] ? 'Stored — leave blank to keep it' : 'Paste public JWK JSON'; ?>" autocomplete="off"></textarea><?php if ($s['public_jwk']): ?><br><label><input type="checkbox" name="clear_public_jwk" value="1"> Remove stored public JWK</label><?php endif; ?></td></tr>
                 </table><?php submit_button('Save Sandbox Configuration'); ?>
             </form>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Generate a new MathBinder signing key? Any Canvas developer key using the previous public key must be updated.');"><input type="hidden" name="action" value="mathbinder_generate_canvas_keys"><?php wp_nonce_field('mathbinder_generate_canvas_keys','mathbinder_canvas_key_nonce'); ?><?php submit_button($s['private_key'] ? 'Rotate MathBinder Signing Key' : 'Generate MathBinder Signing Key','secondary'); ?></form>
             <hr><h2>Validation and activation gate</h2><p>Local validation checks required fields and formats only. It does not contact Canvas or transmit MathBinder data.</p>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="mathbinder_validate_canvas_settings"><?php wp_nonce_field('mathbinder_validate_canvas_settings','mathbinder_canvas_validate_nonce'); ?><label><input type="checkbox" name="enable_sandbox" value="1" <?php checked($s['sandbox_enabled']); ?>> Explicitly enable the sandbox gate after validation</label><?php submit_button('Validate Saved Configuration','secondary'); ?></form>
             <hr><h2>LTI 1.3 readiness</h2>
-            <p><strong>Canvas registration JSON:</strong> <a href="<?php echo esc_url(rest_url('mathbinder/v1/canvas/config')); ?>" target="_blank" rel="noopener"><?php echo esc_html(rest_url('mathbinder/v1/canvas/config')); ?></a></p>
-            <p><strong>MathBinder public JWKS:</strong> <a href="<?php echo esc_url(rest_url('mathbinder/v1/canvas/jwks')); ?>" target="_blank" rel="noopener"><?php echo esc_html(rest_url('mathbinder/v1/canvas/jwks')); ?></a></p>
+            <table class="widefat striped" style="max-width:1100px"><thead><tr><th>Canvas developer-key value</th><th>MathBinder endpoint</th></tr></thead><tbody>
+                <tr><td>Configuration URL</td><td><code><?php echo esc_html(rest_url('mathbinder/v1/canvas/config')); ?></code></td></tr>
+                <tr><td>OIDC initiation URL</td><td><code><?php echo esc_html($registration['oidc_initiation_url']); ?></code></td></tr>
+                <tr><td>Target link / redirect URI</td><td><code><?php echo esc_html($registration['target_link_uri']); ?></code></td></tr>
+                <tr><td>Public JWKS URL</td><td><code><?php echo esc_html($registration['public_jwk_url']); ?></code></td></tr>
+            </tbody></table>
             <p>This release installs fail-closed sandbox endpoints. They remain inactive until configuration, validation, activation, signed-request verification, and authorization gates all pass.</p>
             <table class="widefat striped" style="max-width:900px"><thead><tr><th>Service boundary</th><th>Status</th></tr></thead><tbody>
                 <?php foreach (MathBinder_Canvas_Protocol::services() as $service): ?><tr><td><?php echo esc_html($service['label']); ?></td><td><?php echo $service['state'] === 'endpoint_ready' ? '<strong>Sandbox endpoint ready — gated</strong>' : 'Deferred'; ?></td></tr><?php endforeach; ?>
@@ -178,6 +210,11 @@ final class MathBinder_Canvas_Settings {
 
     private static function text_row($key,$label,$value,$placeholder) { ?><tr><th scope="row"><label for="mb-<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></label></th><td><input id="mb-<?php echo esc_attr($key); ?>" name="<?php echo esc_attr($key); ?>" class="large-text code" value="<?php echo esc_attr($value); ?>" placeholder="<?php echo esc_attr($placeholder); ?>" spellcheck="false" autocomplete="off"></td></tr><?php }
     private static function label($key) { return ucwords(str_replace('_',' ',$key)); }
+    private static function keys_match($private,$jwk) {
+        if(!is_array($jwk)||empty($private)||empty($jwk['n'])||empty($jwk['e'])||!function_exists('openssl_pkey_get_private'))return false;
+        $resource=openssl_pkey_get_private($private);if(!$resource)return false;$details=openssl_pkey_get_details($resource);
+        return is_array($details)&&!empty($details['rsa']['n'])&&!empty($details['rsa']['e'])&&hash_equals((string)$jwk['n'],MathBinder_Canvas_Crypto::b64url_encode($details['rsa']['n']))&&hash_equals((string)$jwk['e'],MathBinder_Canvas_Crypto::b64url_encode($details['rsa']['e']));
+    }
     private static function authorize() { if (!current_user_can(MathBinder_Capabilities::MANAGE_INTEGRATIONS)) wp_die('You do not have permission to manage Canvas settings.', 403); }
     private static function seal($value) {
         if ($value === '' || strpos($value, 'mbenc:') === 0) return $value;

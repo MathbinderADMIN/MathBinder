@@ -25,11 +25,11 @@ final class MathBinder_Canvas_Submission {
         global $wpdb;$enrolled=(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}mb_enrollments WHERE class_id=%d AND user_id=%d AND role_key='student' AND status='active'",absint($course_mapping['mathbinder_id']),absint($mapping['mathbinder_id'])));if(!$enrolled)return new WP_Error('mb_canvas_enrollment','The approved Canvas identity is not actively enrolled in the mapped MathBinder class.',['status'=>403]);
         $deep=(array)($claims['https://purl.imsglobal.org/spec/lti-dl/claim/deep_linking_settings'] ?? []);
         $return_url=esc_url_raw((string)($deep['deep_link_return_url'] ?? ''));
-        if ($return_url==='' || stripos($return_url,rtrim((string)$settings['canvas_url'],'/'))!==0) return new WP_Error('mb_canvas_return_url','Canvas did not provide an approved Deep Linking return URL.',['status'=>400]);
+        if ($return_url==='' || !self::trusted_canvas_url($return_url,$settings)) return new WP_Error('mb_canvas_return_url','Canvas did not provide an approved Deep Linking return URL.',['status'=>400]);
         $token=MathBinder_Canvas_Crypto::b64url_encode(random_bytes(32));
         set_transient(self::LAUNCH_PREFIX.hash('sha256',$token),[
             'student_id'=>absint($mapping['mathbinder_id']),'external_user_id'=>$external_user,'return_url'=>$return_url,
-            'data'=>(string)($deep['data'] ?? ''),'aud'=>rtrim((string)$settings['canvas_url'],'/'),
+            'data'=>(string)($deep['data'] ?? ''),'aud'=>rtrim((string)($claims['iss']??$settings['platform_issuer']??$settings['canvas_url']),'/'),
             'context_id'=>(string)($context['id'] ?? ''),'class_id'=>absint($course_mapping['mathbinder_id']),'created_at'=>time(),
         ],20*MINUTE_IN_SECONDS);
         return new WP_REST_Response(null,303,['Location'=>add_query_arg('mathbinder_canvas_submission',$token,home_url('/'))]);
@@ -75,4 +75,5 @@ final class MathBinder_Canvas_Submission {
 
     public static function approve_mapping(){if(!current_user_can(MathBinder_Capabilities::MANAGE_INTEGRATIONS))wp_die('Canvas administrator access required.','',['response'=>403]);check_admin_referer('mathbinder_canvas_approve_mapping','mathbinder_canvas_mapping_nonce');$id=absint($_POST['mapping_id']??0);$target=absint($_POST['mathbinder_id']??0);$mapping=MathBinder_Canvas_Repository::mapping_by_id($id,MathBinder_Canvas_Settings::get());if(!$mapping||!$target)wp_die('Mapping information is invalid.','',['response'=>400]);$type=$mapping['mapping_type']==='context'?'class':'user';if($type==='user'&&!get_userdata($target))wp_die('MathBinder user not found.','',['response'=>400]);if($type==='class'){global $wpdb;if(!(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}mb_classes WHERE id=%d",$target)))wp_die('MathBinder class not found.','',['response'=>400]);}MathBinder_Canvas_Repository::approve_mapping($id,$type,$target,MathBinder_Canvas_Settings::get());MathBinder_Audit_Log::record('approve','canvas_mapping',$id,['mathbinder_type'=>$type,'mathbinder_id'=>$target]);wp_safe_redirect(add_query_arg('canvas_mapping','approved',admin_url('options-general.php?page='.MathBinder_Canvas_Settings::PAGE_SLUG.'#testing')));exit;}
     private static function is_learner(array $roles){foreach($roles as $role)if(stripos((string)$role,'learner')!==false||stripos((string)$role,'student')!==false)return true;return false;}
+    private static function trusted_canvas_url($url,array $settings){$candidate=wp_parse_url($url);$canvas=wp_parse_url($settings['canvas_url']??'');return is_array($candidate)&&is_array($canvas)&&strtolower((string)($candidate['scheme']??''))==='https'&&strtolower((string)($candidate['host']??''))===strtolower((string)($canvas['host']??''))&&absint($candidate['port']??443)===absint($canvas['port']??443);}
 }
