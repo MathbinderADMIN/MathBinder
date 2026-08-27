@@ -1,0 +1,60 @@
+<?php
+/** Canonical 24-field content for Solving & Graphing Equations. */
+if (!defined('ABSPATH')) exit;
+
+return [
+    'solving-linear-equations' => [
+        'title' => 'Solving Linear Equations',
+        'subtitle' => 'Use inverse operations and properties of equality to solve and verify linear equations.',
+        'essential_question' => 'How can we isolate an unknown while keeping an equation balanced?',
+        'learning_targets' => "I can solve one-step, two-step, and multi-step linear equations.\nI can use distribution and combine like terms before isolating a variable.\nI can substitute my solution to verify it.",
+        'vocabulary' => "Equation — a statement that two expressions are equal\nSolution — a value that makes an equation true\nInverse operations — operations that undo one another\nProperties of equality — rules that preserve equality when the same operation is applied to both sides\nVariable — a symbol representing an unknown value",
+        'worked_examples' => "Solve 3x+7=25 | Subtract 7 from both sides. | 3x=18; divide both sides by 3. | x=6; check: 3(6)+7=25.\nSolve 4(x−2)+3=19 | Distribute 4. | 4x−8+3=19; combine terms and add 5. | 4x=24, so x=6.",
+        'common_mistakes' => "Changing only one side | Apply the same operation to both sides to preserve equality.\nLosing a negative during distribution | Multiply the outside factor by every term, including each sign.\nStopping without checking | Substitute the solution into the original equation.",
+        'real_life' => 'Linear equations model budgets, rates, distances, temperature conversions, memberships, and unknown measurements.',
+        'videos' => 'Solving linear equations | https://www.khanacademy.org/math/cc-eighth-grade-math/cc-8th-solving-equations',
+        'video_chapters' => "0:00 | The balance model\n1:15 | One-step equations\n2:35 | Two-step equations\n4:00 | Variables on both sides\n5:30 | Check the solution",
+        'practice_warmup' => 'Solve x+9=17. | x=8 | Undo addition with subtraction. | Subtract 9 from both sides. | 8+9=17.',
+        'guided_practice' => "Solve 5x=35. | x=7 | Undo multiplication. | Divide both sides by 5. | 7.\nSolve 2x−6=14. | x=10 | Add 6, then divide by 2. | 2x=20. | x=10.\nSolve 3(x+4)=27. | x=5 | Divide by 3, then subtract 4. | x+4=9. | x=5.",
+        'independent_practice' => "Solve 7x+4=39. | x=5 | Subtract 4, then divide by 7. | | 7x=35.\nSolve 5x−8=2x+13. | x=7 | Move variable terms to one side. | | 3x=21.\nSolve 2(3x−1)=22. | x=4 | Distribute or divide first. | | 6x−2=22.",
+        'challenge_practice' => 'Create a multi-step equation whose solution is −3 and includes distribution and variables on both sides. Solve it two ways and verify the result.',
+        'master_it' => "I can name the inverse operation used at each step.\nI can preserve equality by changing both sides.\nI can simplify accurately and verify the solution in the original equation.",
+        'mastery_questions' => "Solve x+8=15. | 7 ; 8 ; 23 ; 120 | A\nSolve 4x=28. | 6 ; 7 ; 24 ; 32 | B\nSolve 3x−5=16. | 3 ; 5 ; 7 ; 11 | C\nSolve 2(x+3)=18. | 3 ; 6 ; 9 ; 12 | B\nWhat best verifies a solution? | Round it ; Substitute it ; Graph only ; Change its sign | B",
+        'parent_summary' => 'Students solve linear equations by keeping both sides balanced, undoing operations in a logical order, and checking solutions by substitution.',
+        'parent_conversation' => "Ask: What operation should be undone first and why?\nAsk: How did you keep both sides balanced?\nAsk your child to show the substitution check.",
+        'parent_five_minute' => 'Write a mystery-number statement such as “three times a number plus two is 20.” Translate it into an equation, solve it together, and check the answer.',
+        'teacher_objectives' => "Students will solve linear equations of increasing complexity.\nStudents will justify steps with properties of equality.\nStudents will distinguish one solution, no solution, and infinitely many solutions.",
+        'teacher_pacing' => "Launch | 5 minutes | Use a physical or visual balance.\nLearn It | 15 minutes | Connect inverse operations to equality.\nWatch It | 7 minutes | Predict each next step.\nPractice It | 20 minutes | Progress from one-step to multi-step.\nMastery | 8 minutes | Require a substitution check.",
+        'teacher_misconceptions' => "Students move terms by changing signs without reasoning | Write the same inverse operation on both sides.\nStudents divide only one term | Use grouping and divide the entire side.\nStudents confuse expressions with equations | Identify the equals sign and both expressions.",
+        'teacher_differentiation' => "Below Level | Use balance mats and integer tiles.\nOn Level | Mix two-step and distributive equations.\nAdvanced | Include variables on both sides and special solution cases.\nMultilingual Learners | Use undo, both sides, and check sentence frames.",
+        'teacher_formative' => "Ask students to annotate the property used at each step.\nUse one error-analysis problem.\nCollect an exit ticket requiring a solution and substitution check.",
+        'standards' => "CCSS.MATH.CONTENT.6.EE.B.5–7 — Understand solving and solve equations.\nCCSS.MATH.CONTENT.7.EE.B.4.A — Solve word problems with equations.\nCCSS.MATH.CONTENT.8.EE.C.7 — Solve linear equations in one variable.\nCCSS.MATH.PRACTICE.MP1, MP3, and MP6 — Persevere, justify, and attend to precision."
+    ],
+    'graphing-linear-equations' => [
+        'title' => 'Graphing Linear Equations',
+        'subtitle' => 'Represent linear equations with tables, ordered pairs, graphs, slope, and intercepts.',
+        'essential_question' => 'How does a linear equation describe every point on a straight line?',
+        'learning_targets' => "I can create ordered pairs that satisfy a linear equation.\nI can graph a line using a table, slope and y-intercept, or intercepts.\nI can interpret slope and intercepts in context.",
+        'vocabulary' => "Linear equation — an equation whose graph is a straight line\nOrdered pair — coordinates (x,y) locating a point\nSlope — vertical change divided by horizontal change\nY-intercept — point where a graph crosses the y-axis\nSolution — an ordered pair that makes an equation true",
+        'worked_examples' => "Graph y=2x−1 | Identify slope 2 and y-intercept −1. | Plot (0,−1), then rise 2 and run 1. | Draw the line through the points.\nGraph 2x+y=6 | Solve for y: y=−2x+6. | Plot (0,6) and use slope −2. | Another point is (3,0).",
+        'common_mistakes' => "Reversing x and y coordinates | Read each ordered pair as (x,y).\nUsing slope as run over rise | Slope is vertical change divided by horizontal change.\nDrawing only a segment | Extend the line with arrows unless the context restricts the domain.",
+        'real_life' => 'Linear graphs model constant rates, starting fees, distance over time, savings, temperature conversion, and changing quantities.',
+        'videos' => 'Graphing linear equations | https://www.khanacademy.org/math/cc-eighth-grade-math/cc-8th-linear-equations-functions',
+        'video_chapters' => "0:00 | Solutions as points\n1:15 | Build a table\n2:40 | Slope and y-intercept\n4:05 | Graph standard form\n5:30 | Interpret the graph",
+        'practice_warmup' => 'Does (2,5) satisfy y=2x+1? | Yes | Substitute x=2 and y=5. | 5=2(2)+1. | Both sides equal 5.',
+        'guided_practice' => "Graph y=x+2. | Points include (0,2), (1,3), and (2,4) | Start at the y-intercept. | Use slope 1. | Draw the line.\nFind slope through (1,3) and (4,9). | 2 | Compute change in y over change in x. | (9−3)/(4−1). | 6/3=2.\nFind intercepts of x+2y=6. | (6,0) and (0,3) | Set one variable equal to zero at a time. | | Plot both points.",
+        'independent_practice' => "Graph y=−3x+4. | y-intercept 4; slope −3 | Plot (0,4). | | Use down 3, right 1.\nDoes (−1,5) lie on y=−2x+3? | Yes | Substitute both coordinates. | | 5=−2(−1)+3.\nWrite the equation with slope 4 and y-intercept −2. | y=4x−2 | Use y=mx+b. | | m=4 and b=−2.",
+        'challenge_practice' => 'Design two different linear equations whose graphs intersect at (3,−2). Graph both, verify the intersection algebraically, and explain what the intersection means.',
+        'master_it' => "I can verify that plotted points satisfy the equation.\nI can use slope with the correct rise and run.\nI can connect an equation, table, graph, and context.",
+        'mastery_questions' => "Which point satisfies y=2x+1? | (1,1) ; (1,2) ; (1,3) ; (2,3) | C\nIn y=3x−4, slope is? | −4 ; 3 ; 4 ; x | B\nIn y=3x−4, y-intercept is? | (0,−4) ; (−4,0) ; (0,3) ; (3,0) | A\nSlope through (1,2) and (3,6) is? | 1 ; 2 ; 3 ; 4 | B\nWhich form displays slope and intercept directly? | y=mx+b ; ax+by=c ; x=a ; y=b only | A",
+        'parent_summary' => 'Students graph linear equations and connect the equation’s slope and intercept to tables, ordered pairs, and real situations.',
+        'parent_conversation' => "Ask: What does this point mean?\nAsk: Where does the graph start on the y-axis?\nAsk your child to explain slope as a rate of change.",
+        'parent_five_minute' => 'Choose a starting amount and a constant weekly change. Make a three-row table, write y=mx+b, and sketch the graph together.',
+        'teacher_objectives' => "Students will identify solutions as points on a line.\nStudents will graph linear equations using multiple methods.\nStudents will interpret slope and intercepts with units.",
+        'teacher_pacing' => "Launch | 5 minutes | Plot a real rate situation.\nLearn It | 15 minutes | Connect table, equation, and graph.\nWatch It | 7 minutes | Pause to predict points.\nPractice It | 20 minutes | Mix table, slope-intercept, and intercept methods.\nMastery | 8 minutes | Require interpretation.",
+        'teacher_misconceptions' => "Students plot coordinates in reverse | Trace x first, then y.\nStudents read b as an x-intercept | Link x=0 to the y-axis.\nStudents count slope inconsistently | Use signed vertical and horizontal changes from the same starting point.",
+        'teacher_differentiation' => "Below Level | Use integer-coordinate tables and color-coded axes.\nOn Level | Mix graphing methods and contextual interpretations.\nAdvanced | Compare parallel and intersecting lines and restricted domains.\nMultilingual Learners | Use start, change, input, and output sentence frames.",
+        'teacher_formative' => "Ask students to test one plotted point in the equation.\nUse graph-equation-table matching cards.\nCollect an exit ticket identifying slope, intercept, and one contextual meaning.",
+        'standards' => "CCSS.MATH.CONTENT.8.EE.B.5–6 — Graph proportional relationships and derive slope.\nCCSS.MATH.CONTENT.8.F.A.3 — Interpret y=mx+b as a linear function.\nCCSS.MATH.CONTENT.HSA.CED.A.2 — Create equations and graph them.\nCCSS.MATH.PRACTICE.MP2, MP4, and MP6 — Reason, model, and attend to precision."
+    ]
+];

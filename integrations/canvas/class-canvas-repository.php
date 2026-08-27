@@ -1,0 +1,50 @@
+<?php
+if (!defined('ABSPATH')) exit;
+
+/** Isolates Canvas external IDs from permanent MathBinder records. */
+final class MathBinder_Canvas_Repository {
+    public static function deployment_key(array $settings) { return hash('sha256', rtrim($settings['canvas_url'],'/').'|'.$settings['deployment_id']); }
+    public static function mapping($type, $external_id, array $settings) {
+        global $wpdb; $table=$wpdb->prefix.'mb_canvas_mappings';
+        return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE deployment_key=%s AND mapping_type=%s AND external_id=%s",self::deployment_key($settings),sanitize_key($type),(string)$external_id),ARRAY_A);
+    }
+    public static function save_mapping($type,$external_id,$mb_type,$mb_id,array $metadata,array $settings,$status='pending_review') {
+        global $wpdb; $table=$wpdb->prefix.'mb_canvas_mappings'; $now=current_time('mysql',true);
+        $existing=self::mapping($type,$external_id,$settings);
+        $data=['deployment_key'=>self::deployment_key($settings),'mapping_type'=>sanitize_key($type),'external_id'=>sanitize_text_field($external_id),'mathbinder_type'=>sanitize_key($mb_type),'mathbinder_id'=>absint($mb_id),'status'=>sanitize_key($status),'metadata_json'=>wp_json_encode($metadata),'updated_at'=>$now];
+        if($existing){$old_meta=json_decode($existing['metadata_json']??'{}',true);if(is_array($old_meta))foreach($old_meta as $key=>$value)if(!isset($metadata[$key])||$metadata[$key]===''||$metadata[$key]===[])$metadata[$key]=$value;$data['metadata_json']=wp_json_encode($metadata);if(($existing['status']??'')==='approved'&&$status==='pending_review'){$data['status']='approved';$data['mathbinder_type']=$existing['mathbinder_type'];$data['mathbinder_id']=(int)$existing['mathbinder_id'];}$wpdb->update($table,$data,['id'=>(int)$existing['id']]);return (int)$existing['id'];}
+        $data['created_at']=$now;$wpdb->insert($table,$data);return (int)$wpdb->insert_id;
+    }
+    public static function queue($type,$mb_type,$mb_id,array $payload,array $settings,$external_id='') {
+        global $wpdb; $table=$wpdb->prefix.'mb_canvas_sync_jobs';$now=current_time('mysql',true);
+        $wpdb->insert($table,['deployment_key'=>self::deployment_key($settings),'job_type'=>sanitize_key($type),'direction'=>'outbound','status'=>'queued','mathbinder_type'=>sanitize_key($mb_type),'mathbinder_id'=>(string)$mb_id,'external_id'=>sanitize_text_field($external_id),'payload_json'=>wp_json_encode($payload),'created_at'=>$now,'updated_at'=>$now]);
+        return (int)$wpdb->insert_id;
+    }
+
+    public static function mappings(array $settings, $limit = 100) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'mb_canvas_mappings';
+        $limit = max(1, min(200, absint($limit)));
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$table} WHERE deployment_key=%s ORDER BY updated_at DESC LIMIT %d",
+            self::deployment_key($settings),
+            $limit
+        ), ARRAY_A);
+    }
+
+    public static function jobs(array $settings, $limit = 50) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'mb_canvas_sync_jobs';
+        $limit = max(1, min(100, absint($limit)));
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT id,job_type,direction,status,mathbinder_type,mathbinder_id,external_id,attempts,last_error,created_at,updated_at FROM {$table} WHERE deployment_key=%s ORDER BY id DESC LIMIT %d",
+            self::deployment_key($settings),
+            $limit
+        ), ARRAY_A);
+    }
+
+    public static function mapping_by_id($id,array $settings){global $wpdb;return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}mb_canvas_mappings WHERE id=%d AND deployment_key=%s",absint($id),self::deployment_key($settings)),ARRAY_A);}
+    public static function approved_for_mathbinder($type,$mathbinder_id,array $settings){global $wpdb;return $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}mb_canvas_mappings WHERE deployment_key=%s AND mapping_type=%s AND mathbinder_type=%s AND mathbinder_id=%d AND status='approved' ORDER BY updated_at DESC LIMIT 1",self::deployment_key($settings),sanitize_key($type),sanitize_key($type),absint($mathbinder_id)),ARRAY_A);}
+    public static function approve_mapping($id,$mb_type,$mb_id,array $settings){global $wpdb;return $wpdb->update($wpdb->prefix.'mb_canvas_mappings',['mathbinder_type'=>sanitize_key($mb_type),'mathbinder_id'=>absint($mb_id),'status'=>'approved','updated_at'=>current_time('mysql',true)],['id'=>absint($id),'deployment_key'=>self::deployment_key($settings)],['%s','%d','%s','%s'],['%d','%s']);}
+    public static function finish_job($id,$result){global $wpdb;$error=is_wp_error($result)?sanitize_text_field($result->get_error_message()):'';return $wpdb->update($wpdb->prefix.'mb_canvas_sync_jobs',['status'=>is_wp_error($result)?'failed':'completed','result_json'=>is_wp_error($result)?'':wp_json_encode($result),'attempts'=>1,'last_error'=>$error,'updated_at'=>current_time('mysql',true)],['id'=>absint($id)],['%s','%s','%d','%s','%s'],['%d']);}
+}
