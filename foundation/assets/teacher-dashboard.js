@@ -30,3 +30,4 @@
         search.addEventListener('input',filter); classFilter.addEventListener('change',filter); status.addEventListener('change',filter);
     });
 }());
+document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('[data-mb-roster] tr').forEach(function(row){var name=row.querySelector('td strong');var progress=row.querySelector('.mb-roster-actions a');if(name&&progress&&!name.querySelector('a')){var link=document.createElement('a');link.href=progress.href;link.textContent=name.textContent;name.textContent='';name.appendChild(link);}});});

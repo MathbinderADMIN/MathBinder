@@ -2,7 +2,7 @@
 /**
  * Plugin Name: MathBinder Core
  * Description: Structured Binder Pages with a Quick Add builder, automatic At a Glance details, embedded videos, resource cards, common questions, downloads, and topic navigation.
- * Version: 30.49.0
+ * Version: 30.51.5
  * Author: MathBinder
  * Text Domain: mathbinder-core
  */
@@ -52,6 +52,7 @@ require_once __DIR__ . '/integrations/canvas/class-canvas-settings.php';
 require_once __DIR__ . '/integrations/canvas/class-canvas-protocol.php';
 require_once __DIR__ . '/integrations/canvas/class-canvas-transport.php';
 require_once __DIR__ . '/integrations/canvas/class-canvas-diagnostics.php';
+require_once __DIR__ . '/integrations/canvas/class-canvas-deep-linking.php';
 require_once __DIR__ . '/integrations/canvas/class-canvas-integration.php';
 require_once __DIR__ . '/integrations/canvas/class-canvas-submission.php';
 require_once __DIR__ . '/foundation/bootstrap.php';
@@ -61,7 +62,7 @@ final class MathBinder_Core {
     const TAX = 'mb_binder_section';
     const NONCE = 'mb_binder_page_nonce';
     const QUICK_NONCE = 'mb_quick_add_nonce';
-    const VERSION = '30.49.0';
+    const VERSION = '30.51.5';
 
     private static $runtime_instance_sequence = 0;
     private static $runtime_diag_panel_rendered_state = false;
@@ -2033,6 +2034,8 @@ final class MathBinder_Core {
             $html .= '</button>';
             $html .= '<div class="mb-vocab-definition" hidden>';
             $html .= '<p>' . esc_html($definition ?: 'Add a student-friendly definition in the Binder Page editor.') . '</p>';
+            $note_text = $term . ($definition ? ' — ' . $definition : '');
+            $html .= '<button type="button" class="mb-vocab-add-note" data-mb-vocabulary-text="' . esc_attr($note_text) . '">Add to My Notes</button>';
             $html .= '</div>';
             $html .= '</article>';
         }
@@ -2243,7 +2246,7 @@ final class MathBinder_Core {
             $html .= '<span class="mb-practice-problem-label">' . esc_html(ucfirst($mode)) . ' ' . esc_html($index + 1) . '</span>';
             $html .= '<p class="mb-practice-directions"><strong>Directions:</strong> ' . esc_html($directions) . '</p>';
             $html .= '<h4>' . esc_html($question) . '</h4>';
-            $html .= $this->render_practice_problem_visual($question, $mode, $lesson_title);
+            $html .= $this->render_safe_practice_problem_visual($question, $answer, $mode, $lesson_title);
             if ($mode === 'guided') {
                 $html .= '<div class="mb-guided-steps" aria-label="Guided problem steps">';
                 $html .= '<button type="button" class="mb-guided-step" data-guided-step="1" aria-expanded="false">Start with Step 1</button>';
@@ -2482,6 +2485,16 @@ final class MathBinder_Core {
         return '<figure class="mb-practice-problem-visual mb-measurement-visual"><div><strong>' . esc_html($heading) . '</strong><span>' . esc_html($caption) . '</span></div><svg viewBox="0 0 450 205" role="img" aria-label="' . esc_attr($aria) . '"><g fill="none" stroke="#087f83" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">' . $svg . '</g></svg></figure>';
     }
 
+    private function render_safe_practice_problem_visual($question, $answer, $mode = 'guided', $lesson_title = '') {
+        $visual = $this->render_practice_problem_visual($question, $mode, $lesson_title);
+        $answer_text = strtolower(preg_replace('/[^\p{L}\p{N}.:+\-\/]+/u', '', html_entity_decode(wp_strip_all_tags((string) $answer), ENT_QUOTES, 'UTF-8')));
+        $visual_text = strtolower(preg_replace('/[^\p{L}\p{N}.:+\-\/]+/u', '', html_entity_decode(wp_strip_all_tags((string) $visual), ENT_QUOTES, 'UTF-8')));
+        if ($answer_text !== '' && strpos($visual_text, $answer_text) !== false) {
+            return $this->render_shared_concept_visual('organizer', 'Plan your solution', 'Record what you know, choose a model or rule, and solve without revealing the final answer.', 'A blank problem-solving organizer with spaces for known information, a model or rule, and the unknown');
+        }
+        return $visual;
+    }
+
     private function render_practice_problem_visual($question, $mode = 'guided', $lesson_title = '') {
         $plain_question = str_replace(['−', '–'], '-', (string) $question);
         $question_lower = strtolower($plain_question);
@@ -2513,24 +2526,22 @@ final class MathBinder_Core {
             return $this->render_fraction_bar_visual($fractions, 'Picture the fractional parts', $prompt);
         }
 
-        // Place-value prompts need a completed model of the number in the question.
-        // Handle them before the broad "how many" counting fallback.
+        // Student practice uses unfinished charts. Completed models remain in
+        // instructional examples, never in student response areas.
         if (preg_match('/show\s+(\d{1,6}(?:\.\d+)?)\s+as\s+/i', $plain_question, $place_number)) {
-            return $this->render_place_value_chart_visual($place_number[1], 'Picture the number by place value', $this->place_value_explanation($place_number[1]));
+            return $this->render_practice_place_value_visual($place_number[1], $prompt);
         }
         if (preg_match('/build\s+(\d{1,6}(?:\.\d+)?)/i', $plain_question, $place_number)) {
-            return $this->render_place_value_chart_visual($place_number[1], 'Picture the number by place value', $this->place_value_explanation($place_number[1]));
+            return $this->render_practice_place_value_visual($place_number[1], $prompt);
         }
         if (preg_match('/write\s+(\d{1,6}(?:\.\d+)?)\s+in\s+(?:expanded|word|standard)\s+form/i', $plain_question, $place_number)) {
-            return $this->render_place_value_chart_visual($place_number[1], 'Picture the number by place value', $this->place_value_explanation($place_number[1]));
+            return $this->render_practice_place_value_visual($place_number[1], $prompt);
         }
         if (preg_match('/(\d+)\s+hundreds?\s*,?\s*(\d+)\s+tens?\s*,?\s*(?:and\s+)?(\d+)\s+ones?/i', $plain_question, $place_parts)) {
-            $number = ((int) $place_parts[1] * 100) + ((int) $place_parts[2] * 10) + (int) $place_parts[3];
-            return $this->render_place_value_chart_visual((string) $number, 'Picture the number by place value', $this->place_value_explanation($number));
+            return $this->render_practice_place_value_visual('', $prompt);
         }
         if (preg_match('/(\d+)\s+tens?\s+(?:and\s+)?(\d+)\s+ones?/i', $plain_question, $place_parts)) {
-            $number = ((int) $place_parts[1] * 10) + (int) $place_parts[2];
-            return $this->render_place_value_chart_visual((string) $number, 'Picture the number by place value', $this->place_value_explanation($number));
+            return $this->render_practice_place_value_visual('', $prompt, ['tens', 'ones']);
         }
 
         if (preg_match('/equal groups|rows? of|columns? of|array|groups? (?:with|of)|multiply|multiplication|factor pairs?/', $context)) {
@@ -2632,9 +2643,9 @@ final class MathBinder_Core {
 
         if (preg_match('/place value|decimal place|digit|powers? of ten|expanded form|standard form|word form/', $context)) {
             if (preg_match('/\b\d{1,6}(?:\.\d+)?\b/', $plain_question, $place_number)) {
-                return $this->render_place_value_chart_visual($place_number[0], 'Picture the number by place value', $this->place_value_explanation($place_number[0]));
+                return $this->render_practice_place_value_visual($place_number[0], $prompt);
             }
-            return $this->render_place_value_chart_visual('326', 'Study a completed place-value model', 'This example is filled in: 3 hundreds, 2 tens, and 6 ones make 326.');
+            return $this->render_practice_place_value_visual('', $prompt);
         }
         if (preg_match('/fraction|ratio|rate|proportion|percent/', $context)) {
             return $this->render_shared_concept_visual('fraction-ratio', 'Picture the parts and the whole', $prompt, 'A bar model divided into equal parts with some parts shaded');
@@ -2694,6 +2705,18 @@ final class MathBinder_Core {
             $descriptions[] = $decimal[$i] . ' ' . $decimal_names[$i];
         }
         return 'The completed model shows ' . implode(', ', $descriptions) . '. Together, the digits make ' . $normalized . '.';
+    }
+
+    private function render_practice_place_value_visual($given_number = '', $prompt = '', $labels = ['hundreds', 'tens', 'ones']) {
+        $labels = array_values(array_filter(array_map('sanitize_text_field', (array) $labels)));
+        if (!$labels) $labels = ['hundreds', 'tens', 'ones'];
+        $given_number = preg_replace('/[^0-9.]/', '', (string) $given_number);
+        $heading = $given_number !== '' ? 'Organize ' . $given_number . ' by place value' : 'Build the number by place value';
+        $cells = '';
+        foreach ($labels as $label) {
+            $cells .= '<label class="mb-place-value-entry"><strong>' . esc_html($label) . '</strong><input type="text" inputmode="decimal" maxlength="3" autocomplete="off" aria-label="Enter the ' . esc_attr($label) . ' value"></label>';
+        }
+        return '<figure class="mb-practice-problem-visual mb-practice-visual-place-value"><div><strong>' . esc_html($heading) . '</strong><span>' . esc_html($prompt ?: 'Fill in the chart, then solve.') . '</span></div><div class="mb-place-value-entry-grid" style="--mb-place-columns:' . esc_attr(count($labels)) . '" role="group" aria-label="Writable place-value chart">' . $cells . '</div></figure>';
     }
 
     private function render_place_value_chart_visual($number, $heading, $prompt) {
@@ -4229,7 +4252,7 @@ final class MathBinder_Core {
         ob_start(); ?>
         <section class="mb-curriculum-catalog" data-mb-curriculum-catalog>
             <header class="mb-curriculum-catalog-heading">
-                <div><span class="mb-topics-kicker">Common Core Mathematics · Core 30.44.0</span><h2>Standards Domains and Course Pathways</h2><p>Choose a Binder Section to open its notebook page and lesson subtopics.</p></div>
+                <div><span class="mb-topics-kicker">Common Core Mathematics · Core <?php echo esc_html(self::VERSION); ?></span><h2>Standards Domains and Course Pathways</h2><p>Choose a Binder Section to open its notebook page and lesson subtopics.</p></div>
             </header>
             <div class="mb-curriculum-filters">
                 <label>Find a topic<input type="search" data-mb-catalog-search placeholder="Example: fractions, equations, derivatives"></label>

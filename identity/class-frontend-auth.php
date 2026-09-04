@@ -85,11 +85,21 @@ final class MathBinder_Frontend_Auth {
         @media (min-width:1001px){
             .mb-compact-header{overflow:visible!important}
             .mb-compact-nav{width:100%!important;max-width:none!important;overflow:visible!important}
-            ul.mb-compact-menu{display:flex!important;align-items:center!important;justify-content:flex-start!important;flex-wrap:nowrap!important;gap:4px!important;width:auto!important;max-width:100%!important;margin:0!important;padding:0!important;overflow:visible!important}
+            ul.mb-compact-menu{display:flex!important;align-items:center!important;justify-content:center!important;flex-wrap:wrap!important;gap:4px!important;width:auto!important;max-width:100%!important;margin:0 auto!important;padding:0!important;overflow:visible!important}
             ul.mb-compact-menu>li{flex:0 0 auto!important;width:auto!important;min-width:0!important;margin:0!important;padding:0!important}
             ul.mb-compact-menu>li>a{display:flex!important;align-items:center!important;justify-content:center!important;width:auto!important;min-width:0!important;min-height:34px!important;margin:0!important;padding:7px 7px!important;font-size:13px!important;line-height:1.1!important;letter-spacing:0!important;white-space:nowrap!important}
             ul.mb-compact-menu>.mb-auth-menu-item>a,
-            ul.mb-compact-menu>.mb-signup-menu-item>a{min-height:34px!important;padding:6px 11px!important;font-size:12px!important}
+            ul.mb-compact-menu>.mb-signup-menu-item>a{display:inline-flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;min-height:34px!important;padding:6px 14px!important;font-size:12px!important;text-align:center!important;text-indent:0!important}
+            ul.mb-compact-menu>.mb-auth-menu-item-logout>a{display:flex!important;align-items:center!important;justify-content:center!important;width:118px!important;min-width:118px!important;padding:6px 0!important;text-align:center!important;text-indent:0!important}
+            ul.mb-compact-menu>.mb-auth-menu-item-logout>a>.mb-auth-label{display:inline-block!important;position:static!important;width:auto!important;margin:0!important;padding:0!important;transform:none!important;text-align:center!important;text-indent:0!important;color:#fff!important;visibility:visible!important;opacity:1!important}
+            ul.mb-compact-menu>.mb-auth-menu-item-login>a{display:flex!important;align-items:center!important;justify-content:center!important;width:104px!important;min-width:104px!important;padding:6px 0!important;text-align:center!important;text-indent:0!important}
+            ul.mb-compact-menu>.mb-signup-menu-item>a{display:flex!important;align-items:center!important;justify-content:center!important;width:124px!important;min-width:124px!important;padding:6px 0!important;text-align:center!important;text-indent:0!important}
+            ul.mb-compact-menu>.mb-auth-menu-item-login>a>.mb-auth-label,
+            ul.mb-compact-menu>.mb-signup-menu-item>a>.mb-auth-label{display:inline-block!important;position:static!important;width:auto!important;margin:0!important;padding:0!important;transform:none!important;text-align:center!important;text-indent:0!important;visibility:visible!important;opacity:1!important}
+            ul.mb-compact-menu>.mb-auth-menu-item>a:before,
+            ul.mb-compact-menu>.mb-auth-menu-item>a:after,
+            ul.mb-compact-menu>.mb-signup-menu-item>a:before,
+            ul.mb-compact-menu>.mb-signup-menu-item>a:after{display:none!important;content:none!important}
         }
         </style>
         <script id="mathbinder-compact-navigation-bootstrap">
@@ -126,10 +136,10 @@ final class MathBinder_Frontend_Auth {
         }
 
         $account_item = '<li class="menu-item ' . esc_attr($class) . '"><a href="' .
-            esc_url($url) . '">' . esc_html($label) . '</a></li>';
+            esc_url($url) . '"><span class="mb-auth-label">' . esc_html($label) . '</span></a></li>';
         if (!is_user_logged_in()) {
             $account_item .= '<li class="menu-item mb-signup-menu-item"><a href="' .
-                esc_url(home_url('/sign-up/')) . '">Sign Up</a></li>';
+                esc_url(home_url('/sign-up/')) . '"><span class="mb-auth-label">Sign Up</span></a></li>';
         }
         return $items . $account_item;
     }

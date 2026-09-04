@@ -14,6 +14,7 @@ final class MathBinder_Canvas_Integration {
         MathBinder_Canvas_Settings::register();
         MathBinder_Canvas_Diagnostics::register();
         MathBinder_Canvas_Transport::register();
+        MathBinder_Canvas_Deep_Linking::register();
         MathBinder_Canvas_Submission::register();
     }
 

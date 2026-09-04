@@ -33,14 +33,27 @@ final class MathBinder_Canvas_Transport {
         $result=MathBinder_Canvas_Integration::adapter()->launch($request->get_params());if(is_wp_error($result)){MathBinder_Audit_Log::record('blocked','canvas_launch',0,['reason'=>$result->get_error_code()]);return $result;}
         $claims=$result['claims'];$subject=(string)($claims['sub']??'');$context=(array)$result['context'];
         $settings=MathBinder_Canvas_Settings::get();$ags=(array)($result['services']['ags']??[]);$lineitem=esc_url_raw((string)($ags['lineitem']??''));$scores_url=$lineitem!==''?rtrim($lineitem,'/').'/scores':'';
-        MathBinder_Canvas_Repository::save_mapping('context',(string)($context['id']??''),'class',0,['label'=>sanitize_text_field($context['label']??''),'title'=>sanitize_text_field($context['title']??'')],$settings,'pending_review');
-        MathBinder_Canvas_Repository::save_mapping('user',$subject,'user',0,['roles'=>array_map('sanitize_text_field',(array)($result['roles']??[])),'context_id'=>(string)($context['id']??''),'scores_url'=>$scores_url],$settings,'pending_review');
+        $context_id=(string)($context['id']??'');
+        MathBinder_Canvas_Repository::save_mapping('context',$context_id,'class',0,['label'=>sanitize_text_field($context['label']??''),'title'=>sanitize_text_field($context['title']??'')],$settings,'pending_review');
+        MathBinder_Canvas_Repository::save_mapping('user',$subject,'user',0,['roles'=>array_map('sanitize_text_field',(array)($result['roles']??[])),'context_id'=>$context_id,'scores_url'=>$scores_url],$settings,'pending_review');
         MathBinder_Audit_Log::record('verified','canvas_launch',0,['message_type'=>$result['message_type'],'subject_hash'=>hash('sha256',$subject)]);
+        $deep_link=MathBinder_Canvas_Deep_Linking::begin_launch($result);if($deep_link instanceof WP_REST_Response||is_wp_error($deep_link))return $deep_link;
         $submission=MathBinder_Canvas_Submission::begin_launch($result);if($submission instanceof WP_REST_Response||is_wp_error($submission))return $submission;
-        return ['verified'=>true,'message_type'=>$result['message_type'],'mapping_status'=>'pending_review','message'=>'Canvas launch verified. An authorized teacher or administrator must map this course and identity before records synchronize.'];
+        $context_mapping=MathBinder_Canvas_Repository::mapping('context',$context_id,$settings);
+        $user_mapping=MathBinder_Canvas_Repository::mapping('user',$subject,$settings);
+        $approved=self::mapping_is_approved($context_mapping,'class')&&self::mapping_is_approved($user_mapping,'user');
+        return [
+            'verified'=>true,
+            'message_type'=>$result['message_type'],
+            'mapping_status'=>$approved?'approved':'pending_review',
+            'message'=>$approved
+                ?'Canvas launch verified. Course and identity mappings are approved.'
+                :'Canvas launch verified. An authorized teacher or administrator must map this course and identity before records synchronize.',
+        ];
     }
     public static function status(){return MathBinder_Canvas_Integration::status();}
     public static function admin_permission(){return current_user_can(MathBinder_Capabilities::MANAGE_INTEGRATIONS);}
     private static function trusted_endpoint($url,$configured){$a=wp_parse_url($url);$b=wp_parse_url($configured);return is_array($a)&&is_array($b)&&strtolower((string)($a['scheme']??''))==='https'&&strtolower((string)($a['host']??''))===strtolower((string)($b['host']??''))&&absint($a['port']??443)===absint($b['port']??443);}
+    private static function mapping_is_approved($mapping,$type){return is_array($mapping)&&($mapping['status']??'')==='approved'&&($mapping['mathbinder_type']??'')===$type&&absint($mapping['mathbinder_id']??0)>0;}
     private static function gates_pass(){ $s=MathBinder_Canvas_Settings::get();$r=MathBinder_Canvas_Protocol::readiness();return ($s['operating_mode']??'disabled')==='sandbox'&&!empty($r['configuration_complete'])&&!empty($r['locally_validated'])&&!empty($r['activation_gate_enabled'])&&!empty($r['adapter_installed']); }
 }

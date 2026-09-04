@@ -100,7 +100,7 @@ final class MathBinder_Class_Staff {
     }
 
     private static function redirect_notice($notice) {
-        wp_safe_redirect(add_query_arg('staff_notice', sanitize_key($notice), home_url('/'.MathBinder_Teacher_Dashboard::PAGE_SLUG.'/')).'#class-staff'); exit;
+        wp_safe_redirect(add_query_arg('staff_notice', sanitize_key($notice), home_url('/'.MathBinder_Teacher_Dashboard::STAFF_PAGE_SLUG.'/'))); exit;
     }
 
     private static function parsed_date($value, $end = false) {
@@ -113,7 +113,7 @@ final class MathBinder_Class_Staff {
     /** Always return staff form failures to the dashboard instead of leaving a blank admin-post.php response. */
     public static function handle_invite_safe() {
         if (!is_user_logged_in()) {
-            wp_safe_redirect(MathBinder_Frontend_Auth::login_url(home_url('/'.MathBinder_Teacher_Dashboard::PAGE_SLUG.'/#class-staff')));
+            wp_safe_redirect(MathBinder_Frontend_Auth::login_url(home_url('/'.MathBinder_Teacher_Dashboard::STAFF_PAGE_SLUG.'/')));
             exit;
         }
         $nonce=isset($_POST['mb_staff_nonce'])?sanitize_text_field(wp_unslash($_POST['mb_staff_nonce'])):'';

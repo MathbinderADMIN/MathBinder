@@ -7,5 +7,6 @@ interface MathBinder_Canvas_Adapter {
     public function sync_roster($context_id);
     public function create_deep_link(array $resource);
     public function pass_grade(array $score);
+    public function submit_activity(array $submission);
     public function create_evidence_handoff(array $evidence);
 }

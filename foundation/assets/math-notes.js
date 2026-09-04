@@ -1,4 +1,41 @@
 document.addEventListener('DOMContentLoaded', function () {
+  var canvasAssignmentAction = document.querySelector('form [name="action"][value="mb_canvas_save_assignment"]');
+  if (canvasAssignmentAction) {
+    var canvasAssignmentForm = canvasAssignmentAction.form;
+    var launchTokenSource = document.querySelector('[data-mb-canvas-launch-token]');
+    var serverLaunchField = canvasAssignmentForm.querySelector('[name="mb_canvas_launch"]');
+    var launchToken = (serverLaunchField && serverLaunchField.value) || (launchTokenSource && launchTokenSource.dataset.mbCanvasLaunchToken) || new URL(window.location.href).searchParams.get('mb_canvas_launch') || '';
+    var syncCanvasAssignmentFields = function () {
+      var marker = canvasAssignmentForm.querySelector('[name="mb_canvas_assignment_submit"]');
+      if (!marker) { marker = document.createElement('input'); marker.type = 'hidden'; marker.name = 'mb_canvas_assignment_submit'; canvasAssignmentForm.appendChild(marker); }
+      marker.value = '1';
+      var launchField = canvasAssignmentForm.querySelector('[name="mb_canvas_launch"]');
+      if (!launchField) { launchField = document.createElement('input'); launchField.type = 'hidden'; launchField.name = 'mb_canvas_launch'; canvasAssignmentForm.appendChild(launchField); }
+      if (launchToken) launchField.value = launchToken;
+    };
+    syncCanvasAssignmentFields();
+    canvasAssignmentForm.addEventListener('submit', syncCanvasAssignmentFields);
+    canvasAssignmentForm.addEventListener('formdata', function (event) {
+      event.formData.set('mb_canvas_assignment_submit', '1');
+      if (launchToken) event.formData.set('mb_canvas_launch', launchToken);
+    });
+  }
+
+  var lessonNoteTarget = document.querySelector('[data-mb-note-content]');
+  document.querySelectorAll('.mb-vocab-add-note').forEach(function (button) {
+    if (!lessonNoteTarget) { button.hidden = true; return; }
+    button.addEventListener('click', function () {
+      var vocabulary = button.dataset.mbVocabularyText || '';
+      if (!vocabulary) return;
+      var separator = lessonNoteTarget.value.trim() ? '\n' : '';
+      lessonNoteTarget.value += separator + vocabulary;
+      lessonNoteTarget.dispatchEvent(new Event('input', { bubbles: true }));
+      lessonNoteTarget.focus();
+      lessonNoteTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      button.textContent = 'Added to My Notes ✓';
+    });
+  });
+
   document.querySelectorAll('[data-mb-note-editor]').forEach(function (form) {
     var text = form.querySelector('[data-mb-note-content]');
     form.querySelectorAll('[data-mb-symbol]').forEach(function (button) {

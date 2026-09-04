@@ -178,6 +178,7 @@
 
         const d = window.mathbinderFooterData;
         let footer =
+            document.getElementById('mb-official-site-footer') ||
             document.querySelector('footer.site-footer') ||
             document.querySelector('#colophon') ||
             document.querySelector('.site-footer') ||
@@ -230,11 +231,8 @@
         });
 
         document.querySelectorAll('footer, #colophon, .site-footer').forEach(function(node){
-            if (node === footer || footer.contains(node)) return;
-            const text = (node.textContent || '').toLowerCase();
-            if (text.includes('lorem ipsum') || text.includes('terms & conditions')) {
-                node.remove();
-            }
+            if (node === footer || footer.contains(node) || node.contains(footer)) return;
+            node.remove();
         });
     }
 

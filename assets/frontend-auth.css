@@ -48,6 +48,12 @@
 .mb-auth-menu-item-login > a:hover, .mb-auth-menu-item-login > a:focus { background: #f0fdfa !important; color: #075f61 !important; }
 .mb-auth-menu-item-logout > a,.mb-signup-menu-item > a { border-radius: 999px !important; background: #6d28d9 !important; color: #fff !important; padding-left: 18px !important; padding-right: 18px !important; font-weight: 800 !important; }
 .mb-auth-menu-item-logout > a:hover,.mb-auth-menu-item-logout > a:focus,.mb-signup-menu-item > a:hover,.mb-signup-menu-item > a:focus { background: #5120a7 !important; color: #fff !important; }
+.mb-auth-menu-item > a::before,.mb-auth-menu-item > a::after,.mb-signup-menu-item > a::before,.mb-signup-menu-item > a::after { display: none !important; content: none !important; }
+.mb-auth-menu-item-logout > a { display: flex !important; align-items: center !important; justify-content: center !important; width: 118px !important; min-width: 118px !important; padding: 6px 0 !important; text-align: center !important; text-indent: 0 !important; }
+.mb-auth-menu-item-logout > a > .mb-auth-label { display: inline-block !important; position: static !important; width: auto !important; margin: 0 !important; padding: 0 !important; transform: none !important; text-align: center !important; text-indent: 0 !important; color: #fff !important; visibility: visible !important; opacity: 1 !important; }
+.mb-auth-menu-item-login > a { display: flex !important; align-items: center !important; justify-content: center !important; width: 104px !important; min-width: 104px !important; padding: 6px 0 !important; text-align: center !important; text-indent: 0 !important; }
+.mb-signup-menu-item > a { display: flex !important; align-items: center !important; justify-content: center !important; width: 124px !important; min-width: 124px !important; padding: 6px 0 !important; text-align: center !important; text-indent: 0 !important; }
+.mb-auth-menu-item-login > a > .mb-auth-label,.mb-signup-menu-item > a > .mb-auth-label { display: inline-block !important; position: static !important; width: auto !important; margin: 0 !important; padding: 0 !important; transform: none !important; text-align: center !important; text-indent: 0 !important; visibility: visible !important; opacity: 1 !important; }
 
 /* MathBinder 30.0.8 — compact desktop navigation so account actions stay above the fold. */
 @media (min-width: 1001px) {

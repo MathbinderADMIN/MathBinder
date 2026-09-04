@@ -2,6 +2,7 @@
 if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/content-engine/engine.php';
 require_once __DIR__ . '/content-engine/wp-lesson-bridge.php';
+$early_canvas_launch = MathBinder_Canvas_Deep_Linking::current_resource_launch(get_queried_object_id());
 get_header();
 
 $plugin = new MathBinder_Core();
@@ -13,6 +14,17 @@ while (have_posts()): the_post();
     $section = ($terms && !is_wp_error($terms)) ? $terms[0] : null;
     $previous = $plugin->get_adjacent_topic($id, 'previous');
     $next = $plugin->get_adjacent_topic($id, 'next');
+    $canvas_launch = $early_canvas_launch ?: MathBinder_Canvas_Deep_Linking::current_resource_launch($id);
+    $canvas_student = $canvas_launch && MathBinder_Canvas_Deep_Linking::resource_launch_is_student($canvas_launch);
+    $viewer = wp_get_current_user();
+    $viewer_roles = $viewer instanceof WP_User ? (array) $viewer->roles : [];
+    $viewer_is_admin = $viewer instanceof WP_User && user_can($viewer, 'manage_options');
+    $show_parent_support = !$canvas_student && ($viewer_is_admin || (bool) array_intersect([
+        'administrator', 'editor', 'mb_parent', 'mb_teacher', 'mb_class_staff', 'mb_school_admin'
+    ], $viewer_roles));
+    $show_teacher_support = !$canvas_student && ($viewer_is_admin || (bool) array_intersect([
+        'administrator', 'editor', 'mb_teacher', 'mb_class_staff', 'mb_school_admin'
+    ], $viewer_roles));
 ?>
 <main class="mb-page-wrap">
 <nav id="lesson-top" class="mb-breadcrumbs" aria-label="Breadcrumb">
@@ -100,10 +112,10 @@ while (have_posts()): the_post();
         <a href="#watch" data-section-tab="watch">Watch It</a>
         <a href="#practice" data-section-tab="practice">Practice It</a>
         <a href="#binder-pages" data-section-tab="binder-pages">Add to Your Binder</a>
-        <a href="#workbook" data-section-tab="workbook">My Math Journal</a>
+        <a href="#workbook" data-section-tab="workbook"><?php echo $canvas_student ? 'My Assignment Work' : 'My Math Journal'; ?></a>
         <a href="#master" data-section-tab="master">Mastery Check</a>
-        <a href="#parent-help" data-section-tab="parent-help">Parent Help</a>
-        <a href="#teacher-notes" data-section-tab="teacher-notes">Teacher Notes</a>
+        <?php if ($show_parent_support): ?><a href="#parent-help" data-section-tab="parent-help">Parent Help</a><?php endif; ?>
+        <?php if ($show_teacher_support): ?><a href="#teacher-notes" data-section-tab="teacher-notes">Teacher Notes</a><?php endif; ?>
     </nav>
 
     <section id="teach" class="mb-section mb-gold-learn">
@@ -592,6 +604,9 @@ while (have_posts()): the_post();
     </section>
 
 
+    <?php if ($canvas_student): ?>
+        <section id="workbook" class="mb-section mb-workbook-section mb-canvas-student-work"><?php echo $plugin->section_toggle("workbook", "My Assignment Work", true); ?><div id="workbook-content" class="mb-collapsible-content" data-open="true"><?php echo MathBinder_Math_Notes::canvas_lesson_section($id, absint($canvas_launch['class_id'] ?? 0)); ?></div></section>
+    <?php else: ?>
     <section id="workbook" class="mb-section mb-workbook-section"
              data-workbook-post="<?php echo esc_attr($id); ?>"
              data-workbook-title="<?php echo esc_attr(get_the_title()); ?>"
@@ -723,6 +738,7 @@ while (have_posts()): the_post();
             </p>
         </div>
     </section>
+    <?php endif; ?>
 
     <section id="master" class="mb-section mb-master mb-gold-mastery"
              data-mastery-post="<?php echo esc_attr($id); ?>"
@@ -827,6 +843,7 @@ while (have_posts()): the_post();
         </div>
     </section>
 
+    <?php if ($show_parent_support): ?>
     <section id="parent-help" class="mb-section mb-parent mb-gold-parent"
              data-parent-title="<?php echo esc_attr(get_the_title()); ?>">
         <?php echo $plugin->section_toggle("parent-help", "Parent Help", false); ?>
@@ -912,19 +929,19 @@ while (have_posts()): the_post();
                     <h3>Celebrate the explanation, not just the answer</h3>
                     <p>When students explain their reasoning, they strengthen understanding and confidence.</p>
                 </div>
-                <a href="#teacher-notes" data-parent-go-teacher>View Teacher Notes →</a>
+                <?php if ($show_teacher_support): ?><a href="#teacher-notes" data-parent-go-teacher>View Teacher Notes →</a><?php endif; ?>
             </section>
         </div>
     </section>
 
 
-    <?php if (
+    <?php if ($show_teacher_support && (
         $meta('teacher_objectives') || $meta('teacher_pacing') || $meta('teacher_materials') ||
         $meta('teacher_misconceptions') || $meta('teacher_differentiation') ||
         $meta('teacher_small_group') || $meta('teacher_formative') ||
         $meta('teacher_connections') || $meta('teacher_extensions') ||
         $meta('teacher_notes') || $meta('standards')
-    ): ?>
+    )): ?>
         <section id="teacher-notes" class="mb-section mb-teacher mb-gold-teacher">
             <?php echo $plugin->section_toggle("teacher-notes", "Teacher Notes", false); ?>
             <div id="teacher-notes-content" class="mb-collapsible-content">
@@ -1058,6 +1075,7 @@ while (have_posts()): the_post();
                 </section>
             </div>
         </section>
+    <?php endif; ?>
     <?php endif; ?>
 
     <?php if ($meta('related_topics')): ?>

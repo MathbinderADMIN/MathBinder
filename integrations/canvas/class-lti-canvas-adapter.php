@@ -35,6 +35,13 @@ final class MathBinder_LTI_Canvas_Adapter implements MathBinder_Canvas_Adapter {
         $payload=['userId'=>(string)$score['user_id'],'scoreGiven'=>(float)$score['score'],'scoreMaximum'=>(float)($score['maximum']??100),'activityProgress'=>'Completed','gradingProgress'=>'FullyGraded','timestamp'=>gmdate('c')]; if(!empty($score['comment']))$payload['comment']=sanitize_textarea_field($score['comment']);
         return $this->service_request($url,'POST',$payload,['https://purl.imsglobal.org/spec/lti-ags/scope/score']);
     }
+    public function submit_activity(array $submission){
+        $url=esc_url_raw($submission['scores_url']??''); if(!$url)return new WP_Error('mb_canvas_scores_url','Canvas did not provide a score endpoint for this assignment.');
+        $user_id=sanitize_text_field((string)($submission['user_id']??'')); if($user_id==='')return new WP_Error('mb_canvas_submission_user','Canvas did not provide a student identifier.');
+        $payload=['userId'=>$user_id,'activityProgress'=>'Completed','gradingProgress'=>'PendingManual','timestamp'=>gmdate('c')];
+        if(!empty($submission['comment']))$payload['comment']=sanitize_textarea_field($submission['comment']);
+        return $this->service_request($url,'POST',$payload,['https://purl.imsglobal.org/spec/lti-ags/scope/score']);
+    }
     public function create_evidence_handoff(array $evidence){
         if(empty($evidence['student_id'])||empty($evidence['assignment_id'])) return new WP_Error('mb_canvas_evidence','Evidence handoff requires a student and assignment.');
         return add_query_arg(['student'=>absint($evidence['student_id']),'assignment'=>sanitize_text_field($evidence['assignment_id']),'canvas_handoff'=>1],home_url('/evidence-folder/'));
