@@ -37,7 +37,19 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   document.querySelectorAll('[data-mb-note-editor]').forEach(function (form) {
+    form.enctype = 'multipart/form-data';
     var text = form.querySelector('[data-mb-note-content]');
+    if (text) text.required = false;
+    if (form.closest('.mb-notes-workspace-main')) {
+      var title = form.querySelector('[name="note_title"]');
+      var titleLabel = title && title.closest('label');
+      if (titleLabel && titleLabel.firstChild) titleLabel.firstChild.nodeValue = 'Work title';
+      var textLabel = text && text.closest('label');
+      if (textLabel && textLabel.firstChild) textLabel.firstChild.nodeValue = 'My written work';
+      var save = form.querySelector('button[type="submit"]');
+      var noteId = form.querySelector('[name="note_id"]');
+      if (save) save.textContent = noteId && noteId.value ? 'Save Changes' : 'Create Work';
+    }
     form.querySelectorAll('[data-mb-symbol]').forEach(function (button) {
       button.addEventListener('click', function () {
         var start = text.selectionStart || 0;
@@ -58,6 +70,16 @@ document.addEventListener('DOMContentLoaded', function () {
     var drawing = false;
     var history = [];
 
+    var upload = form.querySelector('[data-mb-assignment-upload]');
+    if (!upload) {
+      var uploadBox = document.createElement('div');
+      uploadBox.className = 'mb-assignment-upload';
+      uploadBox.innerHTML = '<label><strong>Upload a screenshot or assignment</strong><input type="file" name="assignment_file" accept=".jpg,.jpeg,.png,.webp,.pdf" data-mb-assignment-upload></label><small>JPG, PNG, WebP, or PDF up to 8 MB. Images open on the drawing board for annotation; PDFs remain attached while you write or draw.</small>';
+      var workspace = form.querySelector('.mb-drawing-workspace');
+      if (workspace) workspace.parentNode.insertBefore(uploadBox, workspace);
+      upload = uploadBox.querySelector('[data-mb-assignment-upload]');
+    }
+
     function whiteBackground() {
       ctx.save(); ctx.globalCompositeOperation = 'destination-over'; ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.restore();
     }
@@ -68,6 +90,27 @@ document.addEventListener('DOMContentLoaded', function () {
       var img = new Image(); img.onload = function () { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); if (record) snapshot(); }; img.src = source;
     }
     load(hidden.value, true);
+
+    if (upload) upload.addEventListener('change', function () {
+      var file = upload.files && upload.files[0];
+      if (!file || file.type.indexOf('image/') !== 0) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var image = new Image();
+        image.onload = function () {
+          var scale = Math.min(1, 1200 / image.width, 1200 / image.height);
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          canvas.classList.add('has-upload-background');
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+          history = []; snapshot();
+        };
+        image.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
 
     function point(event) {
       var rect = canvas.getBoundingClientRect();

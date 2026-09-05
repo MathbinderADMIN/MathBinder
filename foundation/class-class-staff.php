@@ -41,7 +41,11 @@ final class MathBinder_Class_Staff {
     }
 
     public static function enqueue_assets() {
-        if (is_page([self::PAGE_SLUG, MathBinder_Teacher_Dashboard::PAGE_SLUG])) {
+        if (is_page([
+            self::PAGE_SLUG,
+            MathBinder_Teacher_Dashboard::PAGE_SLUG,
+            MathBinder_Teacher_Dashboard::STAFF_PAGE_SLUG,
+        ])) {
             wp_enqueue_style('mathbinder-class-staff', plugins_url('assets/class-staff.css', __FILE__), [], MathBinder_Core::VERSION);
         }
     }

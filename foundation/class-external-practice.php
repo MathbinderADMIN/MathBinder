@@ -14,7 +14,12 @@ final class MathBinder_External_Practice {
     }
 
     public static function enqueue_assets() {
-        if (is_page('evidence-folder') || is_page(MathBinder_Teacher_Dashboard::PAGE_SLUG)) wp_enqueue_style('mathbinder-external-practice', plugins_url('assets/external-practice.css', __FILE__), [], MathBinder_Core::VERSION);
+        if (is_page([
+            'evidence-folder',
+            MathBinder_Teacher_Dashboard::PAGE_SLUG,
+            MathBinder_Teacher_Dashboard::EVIDENCE_PAGE_SLUG,
+            MathBinder_Teacher_Dashboard::PROGRESS_PAGE_SLUG,
+        ])) wp_enqueue_style('mathbinder-external-practice', plugins_url('assets/external-practice.css', __FILE__), [], MathBinder_Core::VERSION);
     }
 
     public static function records($user_id) {

@@ -33,6 +33,7 @@ function mathbinder_foundation_activate() {
     MathBinder_Capabilities::install();
     MathBinder_Identity_Service::install();
     MathBinder_Student_Dashboard::ensure_page();
+    MathBinder_Math_Notes::ensure_page();
     MathBinder_Teacher_Dashboard::ensure_page();
     MathBinder_Class_Staff::ensure_page();
     MathBinder_Account_Workspace::ensure_page();
@@ -45,6 +46,7 @@ register_activation_hook(dirname(__DIR__) . '/mathbinder-core.php', 'mathbinder_
 
 function mathbinder_foundation_upgrade() {
     MathBinder_Student_Dashboard::ensure_page();
+    MathBinder_Math_Notes::ensure_page();
     MathBinder_Teacher_Dashboard::ensure_page();
     MathBinder_Class_Staff::ensure_page();
     MathBinder_Account_Workspace::ensure_page();

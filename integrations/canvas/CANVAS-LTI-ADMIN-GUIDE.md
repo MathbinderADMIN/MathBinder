@@ -1,6 +1,6 @@
 # MathBinder Canvas LTI 1.3 Administrator Guide
 
-MathBinder Core 30.51.5 continues the authenticated Canvas development phase. It is ready for registration, embedded mapped-user launch authentication, instructor lesson selection, front-end student assignment submission, and launch testing in an authorized Canvas Open Source or hosted sandbox. Live production transport remains fail-closed until every administrator gate passes.
+MathBinder Core 30.51.8 continues the authenticated Canvas development phase. It is ready for registration, embedded mapped-user launch authentication, instructor lesson selection, front-end student assignment submission and revision, and launch testing in an authorized Canvas Open Source or hosted sandbox. Live production transport remains fail-closed until every administrator gate passes.
 
 ## Registration URLs
 
@@ -45,8 +45,8 @@ MathBinder remains the system of record for permanent accounts, classes, Mastery
 
 ## Production gate
 
-Core 30.51.5 provides Disabled and Sandbox operating modes. Live mode is visibly locked. Production activation requires a separately reviewed deployment and must not be enabled by editing plugin files or bypassing the administrator gates.
+Core 30.51.8 provides Disabled and Sandbox operating modes. Live mode is visibly locked. Production activation requires a separately reviewed deployment and must not be enabled by editing plugin files or bypassing the administrator gates.
 
-## Core 30.51.5 test console
+## Core 30.51.8 test console
 
 Under **Settings → MathBinder Canvas**, administrators can run local readiness diagnostics, simulate a launch claim, preview roster matches from test JSON, preview Deep Linking, grade-passback policy, and Evidence Folder handoff behavior, review deployment-scoped mappings, and inspect sanitized synchronization history. These previews do not contact Canvas or mutate MathBinder records.

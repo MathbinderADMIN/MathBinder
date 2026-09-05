@@ -7,6 +7,7 @@
 .mb-teacher-dashboard.mb-view-progress > section:not(#roster):not(#student-details):not(#submitted-math-notes),
 .mb-teacher-dashboard.mb-view-mastery > section:not(#mastery-paths),
 .mb-teacher-dashboard.mb-view-evidence > section:not(#evidence):not(#submitted-math-notes),
+.mb-teacher-dashboard.mb-view-assignments > section:not(#assignment-review),
 .mb-teacher-dashboard.mb-view-canvas > section:not(#canvas) { display:none; }
 
 .mb-teacher-dashboard.mb-view-student > section:not(#student-details):not(#submitted-math-notes) { display:none; }

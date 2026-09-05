@@ -202,7 +202,7 @@ final class MathBinder_Student_Dashboard {
                     <a class="is-active" href="<?php echo esc_url(get_permalink()); ?>" aria-current="page"><span aria-hidden="true">⌂</span> Overview</a>
                     <a href="<?php echo esc_url(home_url('/my-mathbinder/')); ?>"><span aria-hidden="true">▤</span> My Learning</a>
                     <a href="<?php echo esc_url(home_url('/evidence-folder/')); ?>"><span aria-hidden="true">✓</span> Evidence Folder</a>
-                    <a href="<?php echo esc_url(get_permalink() . '#my-math-notes'); ?>"><span aria-hidden="true">✎</span> My Math Notes</a>
+                    <a href="<?php echo esc_url(MathBinder_Math_Notes::workspace_url()); ?>"><span aria-hidden="true">✎</span> Notes &amp; Assignment Work</a>
                     <a href="<?php echo esc_url(home_url('/binder-topics/')); ?>"><span aria-hidden="true">⌕</span> Explore the Binder</a>
                 </nav>
                 <div class="mb-sidebar-help">
@@ -303,7 +303,7 @@ final class MathBinder_Student_Dashboard {
                 </section>
                 <?php endif; ?>
 
-                <?php echo MathBinder_Math_Notes::student_section(); ?>
+                <?php echo MathBinder_Math_Notes::dashboard_preview(); ?>
 
                 <section class="mb-dashboard-grid mb-achievement-grid">
                     <article class="mb-panel"><div class="mb-panel-heading"><div><span class="mb-eyebrow">Mastery progress</span><h2>Skills Mastered</h2></div><strong data-mb-mastered-count>0</strong></div><p class="mb-panel-copy" data-mb-mastery-average>No mastery checks completed yet.</p></article>

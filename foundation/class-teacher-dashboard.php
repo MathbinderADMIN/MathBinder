@@ -10,6 +10,7 @@ final class MathBinder_Teacher_Dashboard {
     const PROGRESS_PAGE_SLUG = 'teacher-student-progress';
     const MASTERY_PAGE_SLUG = 'teacher-mastery-paths';
     const EVIDENCE_PAGE_SLUG = 'teacher-evidence';
+    const ASSIGNMENTS_PAGE_SLUG = 'teacher-assignments';
     const CANVAS_PAGE_SLUG = 'teacher-canvas';
 
     public static function register() {
@@ -42,7 +43,7 @@ final class MathBinder_Teacher_Dashboard {
         foreach ([
             self::CLASSES_PAGE_SLUG=>'My Classes', self::STAFF_PAGE_SLUG=>'Class Staff',
             self::PROGRESS_PAGE_SLUG=>'Student Progress', self::MASTERY_PAGE_SLUG=>'Mastery Paths',
-            self::EVIDENCE_PAGE_SLUG=>'Evidence', self::CANVAS_PAGE_SLUG=>'Canvas'
+            self::EVIDENCE_PAGE_SLUG=>'Evidence', self::ASSIGNMENTS_PAGE_SLUG=>'Assignment Review', self::CANVAS_PAGE_SLUG=>'Canvas'
         ] as $slug=>$title) {
             $section_page=get_page_by_path($slug,OBJECT,'page');
             $section_data=['post_type'=>'page','post_status'=>'publish','post_title'=>$title,'post_name'=>$slug,'post_content'=>'['.self::SHORTCODE.']'];
@@ -52,7 +53,7 @@ final class MathBinder_Teacher_Dashboard {
     }
 
     public static function enqueue_assets() {
-        $teacher_pages=[self::PAGE_SLUG,self::CLASS_PAGE_SLUG,self::CLASSES_PAGE_SLUG,self::STAFF_PAGE_SLUG,self::PROGRESS_PAGE_SLUG,self::MASTERY_PAGE_SLUG,self::EVIDENCE_PAGE_SLUG,self::CANVAS_PAGE_SLUG];
+        $teacher_pages=[self::PAGE_SLUG,self::CLASS_PAGE_SLUG,self::CLASSES_PAGE_SLUG,self::STAFF_PAGE_SLUG,self::PROGRESS_PAGE_SLUG,self::MASTERY_PAGE_SLUG,self::EVIDENCE_PAGE_SLUG,self::ASSIGNMENTS_PAGE_SLUG,self::CANVAS_PAGE_SLUG];
         if (is_page($teacher_pages)) wp_enqueue_style('mathbinder-teacher-dashboard', plugins_url('assets/teacher-dashboard.css', __FILE__), [], MathBinder_Core::VERSION);
         if (is_page($teacher_pages)) wp_enqueue_style('mathbinder-teacher-evidence-review', plugins_url('assets/teacher-evidence-review.css', __FILE__), ['mathbinder-teacher-dashboard'], MathBinder_Core::VERSION);
         if (is_page($teacher_pages)) wp_enqueue_style('mathbinder-teacher-mastery-paths', plugins_url('assets/teacher-mastery-paths.css', __FILE__), ['mathbinder-teacher-dashboard'], MathBinder_Core::VERSION);
@@ -688,7 +689,7 @@ PROMPT;
         $user = wp_get_current_user(); $classes = self::classes($user->ID); $visible_classes=array_values(array_filter($classes,function($class)use($user){return MathBinder_Class_Staff::can($user->ID,$class['id'],'view_roster')||MathBinder_Class_Staff::can($user->ID,$class['id'],'view_progress')||MathBinder_Class_Staff::can($user->ID,$class['id'],'view_evidence');})); $students = self::students($visible_classes); $paths = self::teacher_paths($user->ID); $published_paths = array_values(array_filter($paths, function($path){ return ($path['status'] ?? 'published') === 'published'; })); $lessons = self::lessons(); $canvas_status = MathBinder_Canvas_Integration::status(); $canvas_queue = MathBinder_Canvas_Integration::for_teacher($user->ID); $organizations = self::teacher_organizations($user->ID); $class_profiles = self::class_profiles();
         if(is_page(self::CLASS_PAGE_SLUG)){$requested=absint($_GET['class_id']??0);$class=null;foreach($visible_classes as $candidate)if((int)$candidate['id']===$requested){$class=$candidate;break;}if(!$class)return '<section class="mb-dashboard-gate"><h1>Class unavailable</h1><p>This class is not available in your teacher workspace.</p><a class="mb-button mb-button-primary" href="'.esc_url(home_url('/'.self::PAGE_SLUG.'/')).'">Return to Teacher Dashboard</a></section>';return self::render_class_workspace($user,$class,$class_profiles,$published_paths);}
         $view='overview';
-        foreach ([self::CLASSES_PAGE_SLUG=>'classes',self::STAFF_PAGE_SLUG=>'staff',self::PROGRESS_PAGE_SLUG=>'progress',self::MASTERY_PAGE_SLUG=>'mastery',self::EVIDENCE_PAGE_SLUG=>'evidence',self::CANVAS_PAGE_SLUG=>'canvas'] as $slug=>$candidate_view) if(is_page($slug)){$view=$candidate_view;break;}
+        foreach ([self::CLASSES_PAGE_SLUG=>'classes',self::STAFF_PAGE_SLUG=>'staff',self::PROGRESS_PAGE_SLUG=>'progress',self::MASTERY_PAGE_SLUG=>'mastery',self::EVIDENCE_PAGE_SLUG=>'evidence',self::ASSIGNMENTS_PAGE_SLUG=>'assignments',self::CANVAS_PAGE_SLUG=>'canvas'] as $slug=>$candidate_view) if(is_page($slug)){$view=$candidate_view;break;}
         $total_completed = 0; $active_students = 0; $rows = [];
         foreach ($students as $student) { $student['can_view_progress']=MathBinder_Class_Staff::can($user->ID,$student['class_id'],'view_progress'); $student['can_view_evidence']=MathBinder_Class_Staff::can($user->ID,$student['class_id'],'view_evidence'); $student['metrics'] = $student['can_view_progress'] ? self::metrics($student['user_id']) : ['completed'=>0,'notes'=>0,'last'=>'','activity'=>['lessons'=>[]]]; $student['assignments'] = $student['can_view_progress'] ? self::assignments_for_student($student['user_id'], $published_paths, $student['class_id']) : []; $rows[] = $student; $total_completed += $student['metrics']['completed']; if ($student['metrics']['last']) $active_students++; }
         $selected_id = isset($_GET['student']) ? absint($_GET['student']) : 0; $selected_class_id=isset($_GET['class_id'])?absint($_GET['class_id']):0; $selected = null;
@@ -714,7 +715,8 @@ PROMPT;
         ob_start(); ?>
         <div class="mb-teacher-dashboard mb-view-<?php echo esc_attr($selected ? 'student' : $view); ?>">
             <header class="mb-teacher-hero"><div><span>Teacher workspace</span><h1>Welcome, <?php echo esc_html($user->display_name ?: $user->user_login); ?></h1><p>See class enrollment and real MathBinder activity in one place.</p></div><a href="<?php echo esc_url(home_url('/mathbinder-account/')); ?>">Account &amp; Workspaces</a></header>
-            <nav class="mb-teacher-nav" aria-label="Teacher dashboard sections"><a class="<?php echo $view==='overview'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::PAGE_SLUG.'/')); ?>">Overview</a><a class="<?php echo $view==='classes'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::CLASSES_PAGE_SLUG.'/')); ?>">My Classes</a><a class="<?php echo $view==='staff'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::STAFF_PAGE_SLUG.'/')); ?>">Class Staff</a><a class="<?php echo $view==='progress'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::PROGRESS_PAGE_SLUG.'/')); ?>">Student Progress</a><a class="<?php echo $view==='mastery'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::MASTERY_PAGE_SLUG.'/')); ?>">Mastery Paths</a><a class="<?php echo $view==='evidence'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::EVIDENCE_PAGE_SLUG.'/')); ?>">Evidence</a><a class="<?php echo $view==='canvas'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::CANVAS_PAGE_SLUG.'/')); ?>">Canvas</a></nav>
+            <nav class="mb-teacher-nav" aria-label="Teacher dashboard sections"><a class="<?php echo $view==='overview'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::PAGE_SLUG.'/')); ?>">Overview</a><a class="<?php echo $view==='classes'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::CLASSES_PAGE_SLUG.'/')); ?>">My Classes</a><a class="<?php echo $view==='staff'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::STAFF_PAGE_SLUG.'/')); ?>">Class Staff</a><a class="<?php echo $view==='progress'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::PROGRESS_PAGE_SLUG.'/')); ?>">Student Progress</a><a class="<?php echo $view==='mastery'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::MASTERY_PAGE_SLUG.'/')); ?>">Mastery Paths</a><a class="<?php echo $view==='evidence'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::EVIDENCE_PAGE_SLUG.'/')); ?>">Evidence</a><a class="<?php echo $view==='assignments'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::ASSIGNMENTS_PAGE_SLUG.'/')); ?>">Assignment Review</a><a class="<?php echo $view==='canvas'?'is-active':''; ?>" href="<?php echo esc_url(home_url('/'.self::CANVAS_PAGE_SLUG.'/')); ?>">Canvas</a></nav>
+            <?php if($view==='assignments'): echo MathBinder_Math_Notes::teacher_review_center($user->ID,$visible_classes); endif; ?>
             <section id="overview" class="mb-teacher-stats">
                 <article><small>Active classes</small><strong><?php echo count($classes); ?></strong><span>Assigned to this workspace</span></article>
                 <article><small>Enrolled students</small><strong><?php echo count($students); ?></strong><span>Across your classes</span></article>

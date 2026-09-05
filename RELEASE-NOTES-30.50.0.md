@@ -1,4 +1,21 @@
-# MathBinder Core 30.51.5
+# MathBinder Core 30.51.8
+
+## 30.51.8
+
+- Adds a dedicated teacher Assignment Review Center with filters for class, student or assignment, and review status.
+- Opens every submission on a separate grading page with the current written response, drawing, secure upload, and complete version history.
+- Lets authorized teachers save feedback, request a revision, or record points, percentage, completion, or rubric grades.
+- Keeps Canvas-linked controls separate and visible only on Canvas-linked submissions; no Canvas grade is transmitted without the existing approval gate.
+
+## 30.51.7
+
+- Adds teacher-requested revisions and versioned student resubmissions while retaining every locked attempt and its review.
+- Adds private JPG, PNG, WebP, and PDF assignment uploads to student Math Notes and Canvas assignment work.
+- Opens uploaded images on the drawing board for annotation; PDFs remain securely attached while students type or draw.
+- Adds teacher access to uploaded assignment files, attempt history, MathBinder grading, feedback, and revision controls.
+- Replaces the oversized inline notes feed with a compact, searchable Notes & Assignment Work library; every item opens on its own editing or submitted-work page.
+- Adds an explicit create-work flow with class selection while keeping “Private / not assigned” available for personal notes.
+- Restores the shared stylized layouts for the public home, resource, assignment-helper, notebook, and My MathBinder pages, and loads component styling across every applicable teacher route.
 
 ## 30.51.5
 
